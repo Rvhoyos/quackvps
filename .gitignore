@@ -1,0 +1,19 @@
+# AI-assist files (keep out of the repo so it doesn't read as AI-generated)
+CLAUDE.md
+.claude/
+.docs-cache/
+SPEC.md
+
+# Go
+*.exe
+*.test
+*.out
+/dist/
+/bin/
+vendor/
+
+# Editor / OS
+.DS_Store
+.idea/
+.vscode/
+*.swp
