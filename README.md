@@ -102,3 +102,7 @@ go build -o quackvps ./cmd/quackvps
 ```
 
 Releases target `linux/amd64` and `linux/arm64`.
+
+## License
+
+[GPLv3](LICENSE). You may use, run, and modify it freely; if you distribute a modified version, it must also be GPLv3 with source available.
