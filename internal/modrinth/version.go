@@ -24,7 +24,22 @@ func (c *HTTPClient) Versions(ctx context.Context, slug string, loaders, gameVer
 	if err := dl.GetJSON(ctx, endpoint, &versions); err != nil {
 		return nil, fmt.Errorf("list versions for %s: %w", slug, err)
 	}
-	return versions, nil
+	return releasesOnly(versions), nil
+}
+
+// releasesOnly drops beta and alpha builds. A mod's version_type is author-set,
+// and a pre-release often carries a config schema the stable editors don't
+// understand (e.g. QuackedSMP's beta builds below 1.21.11 lack the dashboard key),
+// so offering them means installing something that can't be configured. Modrinth's
+// version endpoint has no version_type filter, so we do it here.
+func releasesOnly(versions []Version) []Version {
+	kept := versions[:0]
+	for _, v := range versions {
+		if v.VersionType == "release" {
+			kept = append(kept, v)
+		}
+	}
+	return kept
 }
 
 // IdentifyByHash asks Modrinth which version each SHA-512 belongs to

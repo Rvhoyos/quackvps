@@ -33,6 +33,8 @@ func TestValidateFailures(t *testing.T) {
 		{"instance with sep", func(c *Config) { c.Instance = "a/b"; c.ResolveDir() }},
 		{"dir not resolved", func(c *Config) { c.Dir = "/wrong" }},
 		{"unknown loader", func(c *Config) { c.Loader = "paper" }},
+		{"forge above split", func(c *Config) { c.Loader = LoaderForge; c.MCVersion = "1.21" }},
+		{"neoforge below split", func(c *Config) { c.MCVersion = "1.20.1" }}, // baseline loader is NeoForge
 		{"mc too old", func(c *Config) { c.MCVersion = "1.16.5" }},
 		{"mc snapshot", func(c *Config) { c.MCVersion = "24w14a" }},
 		{"zero xms", func(c *Config) { c.HeapMinGB = 0 }},
@@ -82,6 +84,23 @@ func TestValidateRestore(t *testing.T) {
 	c.Backup = ""
 	if err := c.Validate(); err == nil {
 		t.Error("expected error when no backup is selected")
+	}
+}
+
+func TestValidateLoaderSplitOK(t *testing.T) {
+	tests := []struct{ loader, version string }{
+		{LoaderForge, "1.20.1"},    // Forge era
+		{LoaderNeoForge, "1.21.8"}, // NeoForge era
+		{LoaderFabric, "1.20.1"},   // split doesn't apply
+		{LoaderFabric, "1.21.8"},
+	}
+	for _, tt := range tests {
+		c := valid()
+		c.Loader = tt.loader
+		c.MCVersion = tt.version
+		if err := c.Validate(); err != nil {
+			t.Errorf("%s %s should be valid: %v", tt.loader, tt.version, err)
+		}
 	}
 }
 

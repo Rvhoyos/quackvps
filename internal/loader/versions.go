@@ -11,13 +11,6 @@ import (
 	"github.com/rvhoyos/quackvps/internal/mojang"
 )
 
-// forgeNeoSplit is the Minecraft version where the modding community split: 1.20.x
-// and older is the Forge era, 1.21+ is NeoForge. We enforce it as a clean, non-
-// overlapping divide so each loader only offers versions where its ecosystem
-// (mods + modpacks) actually lives, even though both technically publish builds
-// across the line.
-const forgeNeoSplit = "1.21"
-
 // SupportedVersions returns the Minecraft releases a loader can run, newest first,
 // filtered to that loader's supported range so the wizard never offers a version
 // with no real ecosystem (e.g. Forge at 26.2, or NeoForge at 1.20.1).
@@ -105,7 +98,7 @@ func forgeGameVersions(ctx context.Context) ([]string, error) {
 // and NeoForge additionally split at forgeNeoSplit so they never overlap.
 func filterRange(loader string, versions []string) []string {
 	floor, _ := mcver.Parse(config.MinMCVersion)
-	split, _ := mcver.Parse(forgeNeoSplit)
+	split, _ := mcver.Parse(config.ForgeNeoSplit)
 
 	inRange := func(v mcver.Version) bool {
 		if !mcver.AtLeast(v, floor) {

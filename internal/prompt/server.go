@@ -10,6 +10,7 @@ import (
 	"github.com/rvhoyos/quackvps/internal/config"
 	"github.com/rvhoyos/quackvps/internal/picker"
 	"github.com/rvhoyos/quackvps/internal/restore"
+	"github.com/rvhoyos/quackvps/internal/system"
 )
 
 // askServer picks the parent container, then either takes a name for a new server
@@ -29,7 +30,7 @@ func askServer(ctx context.Context, cfg *config.Config, pickerStart string) erro
 	cfg.Instance = name
 	cfg.ResolveDir()
 
-	if isExistingInstance(parent, name) {
+	if system.InstanceExists(parent, name) {
 		return resolveExisting(cfg)
 	}
 	cfg.Mode = config.ModeInstall

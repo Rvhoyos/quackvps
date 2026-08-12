@@ -32,7 +32,7 @@ Run it again to add another server. Each one gets its own folder, service, ports
 
 ## Flags
 
-v1 is interactive by design.
+Run with no flags for the wizard. These apply to the interactive run:
 
 | Flag | Does |
 |---|---|
@@ -40,12 +40,58 @@ v1 is interactive by design.
 | `--version` | Print the version and exit. |
 | `--help` | Print usage and exit. |
 
+## Headless (scripts & CI)
+
+Pass `--mode` to run without prompts. A missing or invalid flag exits non-zero with a clear message — it never falls back to a prompt. Before doing any work, quackvps checks the version and mods you asked for actually exist for your loader, so a typo fails fast instead of half-installing.
+
+```sh
+# Install a NeoForge server with a live map and voice chat, no domain (localhost + ssh -L).
+sudo ./quackvps --mode install --parent /home/ubuntu/mc --instance survival \
+  --loader neoforge --mcversion 1.21.8 --server-port 25565 --heap-min 2 --heap-max 4 \
+  --bluemap --bluemap-port 8100 --voicechat --voicechat-port 24454
+
+# Update that server to a newer Minecraft version (keeps your world and mods).
+sudo ./quackvps --mode update --parent /home/ubuntu/mc --instance survival --mcversion 26.1.2
+
+# Restore a world backup from the server's backups/ folder.
+sudo ./quackvps --mode restore --parent /home/ubuntu/mc --instance survival \
+  --backup world-20260610-161024.zip
+```
+
+Every run needs `--mode`, `--parent`, and `--instance`.
+
+**Install** (`--mode install`):
+
+| Flag | Does |
+|---|---|
+| `--loader` | `fabric`, `neoforge`, `forge`, `quilt`, or `vanilla`. |
+| `--mcversion` | Minecraft version, e.g. `1.21.8`. |
+| `--heap-min` / `--heap-max` | JVM heap in GB (`-Xms` / `-Xmx`). |
+| `--server-port` | Minecraft game port. |
+| `--modpack` | Modpack slug (optional). |
+| `--dashboard` / `--votifier` / `--bluemap` / `--voicechat` | Enable an add-on; each needs its `-port`. |
+| `--dashboard-port` / `--votifier-port` / `--bluemap-port` / `--voicechat-port` | Port for the matching add-on. |
+| `--domain` / `--email` | Serve web add-ons at `<sub>.<domain>` over HTTPS instead of localhost. |
+| `--dashboard-subdomain` / `--bluemap-subdomain` | Subdomain per web add-on (with `--domain`). |
+| `--harden-ssh` / `--ssh-pubkey` | Harden SSH to key-only. Requires `--ssh-pubkey` or it refuses, so you can't lock yourself out. |
+
+**Update** (`--mode update`):
+
+| Flag | Does |
+|---|---|
+| `--mcversion` | Target Minecraft version. The loader is detected from disk, not passed. |
+| `--empty-mods` | Start fresh with an empty `mods/` instead of upgrading the existing mods. |
+
+**Restore** (`--mode restore`):
+
+| Flag | Does |
+|---|---|
+| `--backup` | Backup zip to restore, by filename or full path, from the server's `backups/` folder. |
+
 <details>
 <summary>Roadmap (not yet available)</summary>
 
-- **Restore a backup.** Pick a server and a QuackedSMP world backup; quackvps stops the server, moves the current world aside, unzips the backup in its place, and rolls back on failure.
 - **Remove a server.** Clean teardown: stop and disable its service, drop its firewall rules, remove its Caddy config, and delete its folder, after a confirmation.
-- **Non-interactive CLI.** Every action driven by flags with zero prompts, for scripts and CI. A missing required flag fails clearly instead of prompting.
 
 </details>
 

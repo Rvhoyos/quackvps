@@ -16,6 +16,19 @@ func TestJSONArray(t *testing.T) {
 	}
 }
 
+func TestReleasesOnly(t *testing.T) {
+	in := []Version{
+		{ID: "a", VersionType: "release"},
+		{ID: "b", VersionType: "beta"},
+		{ID: "c", VersionType: "release"},
+		{ID: "d", VersionType: "alpha"},
+	}
+	got := releasesOnly(in)
+	if len(got) != 2 || got[0].ID != "a" || got[1].ID != "c" {
+		t.Errorf("releasesOnly = %+v, want the two release builds a,c", got)
+	}
+}
+
 func TestPrimaryFile(t *testing.T) {
 	v := Version{Files: []File{
 		{Filename: "sources.jar", Primary: false},

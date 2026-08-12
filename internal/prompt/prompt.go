@@ -10,13 +10,10 @@ package prompt
 
 import (
 	"context"
-	"os"
-	"path/filepath"
 
 	"github.com/rvhoyos/quackvps/internal/config"
 	"github.com/rvhoyos/quackvps/internal/loader"
 	"github.com/rvhoyos/quackvps/internal/modrinth"
-	"github.com/rvhoyos/quackvps/internal/system"
 )
 
 // Run drives the wizard, filling cfg. cfg arrives with the fields main already
@@ -63,30 +60,4 @@ func Run(ctx context.Context, cfg *config.Config, client modrinth.Client, picker
 		return nil, err
 	}
 	return cfg, nil
-}
-
-// isExistingInstance implements the decided test for "this folder already holds a
-// server": the directory exists AND either its systemd unit is present or it
-// contains a launch jar / run.sh. Only then does the server step offer update.
-func isExistingInstance(parent, name string) bool {
-	dir := filepath.Join(parent, name)
-	info, err := os.Stat(dir)
-	if err != nil || !info.IsDir() {
-		return false
-	}
-	if system.UnitExists("mc-" + name + ".service") {
-		return true
-	}
-	for _, marker := range []string{
-		"run.sh",
-		"server.jar",
-		"fabric-server-launch.jar",
-		"quilt-server-launch.jar",
-		filepath.Join("libraries", "net", "neoforged", "neoforge"),
-	} {
-		if _, err := os.Stat(filepath.Join(dir, marker)); err == nil {
-			return true
-		}
-	}
-	return false
 }

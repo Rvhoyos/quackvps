@@ -64,6 +64,13 @@ const (
 // up. We install Java 17 for 1.18–1.20.4 and Java 21/25 for newer.
 const MinMCVersion = "1.20.1"
 
+// ForgeNeoSplit is the Minecraft version where the modding community forked: 1.20.x
+// and older is the Forge era, 1.21+ is NeoForge. The two never overlap — each
+// loader's mods and modpacks live on one side of the line — so a server must not
+// pair a loader with a version on the wrong side. The loader package filters its
+// version lists by this same boundary.
+const ForgeNeoSplit = "1.21"
+
 // Features are the add-ons chosen on the one selection screen. Each flag drives
 // its own later port/Caddy/firewall work, so we never re-ask "do you want Caddy?".
 type Features struct {
@@ -178,7 +185,32 @@ func (c *Config) validateLoaderAndVersion() error {
 	if !validLoaders[c.Loader] {
 		return fmt.Errorf("unknown loader %q", c.Loader)
 	}
-	return validateMCVersion(c.MCVersion)
+	if err := validateMCVersion(c.MCVersion); err != nil {
+		return err
+	}
+	return validateLoaderSplit(c.Loader, c.MCVersion)
+}
+
+// validateLoaderSplit rejects a loader paired with a Minecraft version on the
+// wrong side of ForgeNeoSplit. The wizard can't produce this (it only offers each
+// loader's own filtered list), but a flag-driven run can, so we guard it here.
+func validateLoaderSplit(loader, version string) error {
+	v, err := mcver.Parse(version)
+	if err != nil {
+		return err // unreachable: the caller validates the version first
+	}
+	split, _ := mcver.Parse(ForgeNeoSplit)
+	switch loader {
+	case LoaderForge:
+		if mcver.AtLeast(v, split) {
+			return fmt.Errorf("Forge stops at Minecraft %s; use NeoForge for %s", ForgeNeoSplit, version)
+		}
+	case LoaderNeoForge:
+		if !mcver.AtLeast(v, split) {
+			return fmt.Errorf("NeoForge starts at Minecraft %s; use Forge for %s", ForgeNeoSplit, version)
+		}
+	}
+	return nil
 }
 
 // validateRestore checks the one field restore needs beyond the common target.

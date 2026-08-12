@@ -31,6 +31,33 @@ func UnitExists(name string) bool {
 	return succeeds(context.Background(), "systemctl", "cat", name)
 }
 
+// InstanceExists reports whether <parent>/<name> already holds a Minecraft server:
+// the directory is present AND either its systemd unit exists or it contains a
+// launch jar / run.sh. It's the guard that keeps a fresh install from clobbering an
+// existing — or half-built — server.
+func InstanceExists(parent, name string) bool {
+	dir := filepath.Join(parent, name)
+	info, err := os.Stat(dir)
+	if err != nil || !info.IsDir() {
+		return false
+	}
+	if UnitExists("mc-" + name + ".service") {
+		return true
+	}
+	for _, marker := range []string{
+		"run.sh",
+		"server.jar",
+		"fabric-server-launch.jar",
+		"quilt-server-launch.jar",
+		filepath.Join("libraries", "net", "neoforged", "neoforge"),
+	} {
+		if _, err := os.Stat(filepath.Join(dir, marker)); err == nil {
+			return true
+		}
+	}
+	return false
+}
+
 func DaemonReload(ctx context.Context) error { return Run(ctx, "systemctl", "daemon-reload") }
 
 // EnableStart enables a unit to start on boot and starts it now.

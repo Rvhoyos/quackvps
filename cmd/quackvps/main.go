@@ -48,7 +48,8 @@ func run() error {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	if err := preflight(); err != nil {
+	nonInteractive := opts.Mode != ""
+	if err := preflight(nonInteractive); err != nil {
 		return err
 	}
 
@@ -59,25 +60,40 @@ func run() error {
 	}
 	cfg.RunAsUser, cfg.RunAsHome = user, home
 
-	// The picker opens at the user's home by default; --dir only changes that
-	// starting folder. It must not touch RunAsHome, which is where the SSH key
-	// lives.
-	pickerStart := cfg.RunAsHome
-	if opts.Dir != "" {
-		pickerStart = opts.Dir
+	client := modrinth.New()
+
+	// Two ways to fill the Config: the flag layer (prompt-free, for scripts) or the
+	// interactive wizard. Both only produce a Config; execution is identical.
+	if nonInteractive {
+		if err := cli.Configure(cfg, opts); err != nil {
+			return err
+		}
+	} else {
+		// The picker opens at the user's home by default; --dir only changes that
+		// starting folder. It must not touch RunAsHome, where the SSH key lives.
+		pickerStart := cfg.RunAsHome
+		if opts.Dir != "" {
+			pickerStart = opts.Dir
+		}
+		if _, err := prompt.Run(ctx, cfg, client, pickerStart); err != nil {
+			return err
+		}
 	}
 
-	client := modrinth.New()
-	if _, err := prompt.Run(ctx, cfg, client, pickerStart); err != nil {
-		return err
-	}
 	if err := cfg.Validate(); err != nil {
 		return fmt.Errorf("configuration is incomplete: %w", err)
+	}
+	if nonInteractive {
+		// The wizard can't offer an unbuildable version/pack; a flag run can, so
+		// verify against the sources before touching anything.
+		if err := cli.VerifyBuildable(ctx, cfg, client); err != nil {
+			return err
+		}
 	}
 
 	switch cfg.Mode {
 	case config.ModeUpdate:
-		return update.Run(ctx, cfg, client, confirm)
+		return update.Run(ctx, cfg, client, updateConfirm(opts))
 	case config.ModeRestore:
 		return restore.Run(ctx, cfg)
 	default:
@@ -85,11 +101,12 @@ func run() error {
 	}
 }
 
-// preflight verifies the essentials before we ask anything: we need root, a
-// supported OS, the required tools, and a real terminal for the wizard.
-func preflight() error {
-	if !cli.Interactive() {
-		return fmt.Errorf("quackvps v1 is interactive; run it in a terminal")
+// preflight verifies the essentials before we ask anything: root, a supported OS,
+// and the required tools. The interactive wizard additionally needs a real
+// terminal; a flag-driven run does not.
+func preflight(nonInteractive bool) error {
+	if !nonInteractive && !cli.Interactive() {
+		return fmt.Errorf("quackvps is interactive without --mode; run it in a terminal or pass --mode")
 	}
 	if err := system.EnsureRoot(); err != nil {
 		return err
@@ -98,6 +115,15 @@ func preflight() error {
 		return err
 	}
 	return system.RequireCapabilities()
+}
+
+// updateConfirm picks how the update's mods-wipe decision is answered: from the
+// --empty-mods flag on a non-interactive run, or the huh prompt interactively.
+func updateConfirm(opts cli.Options) update.ConfirmFunc {
+	if opts.Mode != "" {
+		return func(string) (bool, error) { return !opts.EmptyMods, nil }
+	}
+	return confirm
 }
 
 // confirm is the ConfirmFunc the update flow uses for its one mid-run decision
