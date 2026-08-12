@@ -1,14 +1,23 @@
 # quackvps
 
+[![Latest release](https://img.shields.io/github/v/release/rvhoyos/quackvps)](https://github.com/rvhoyos/quackvps/releases/latest)
+[![Downloads](https://img.shields.io/github/downloads/rvhoyos/quackvps/total)](https://github.com/rvhoyos/quackvps/releases)
+[![CI](https://img.shields.io/github/actions/workflow/status/rvhoyos/quackvps/ci.yml?branch=main&label=CI)](https://github.com/rvhoyos/quackvps/actions/workflows/ci.yml)
+[![License: GPLv3](https://img.shields.io/github/license/rvhoyos/quackvps)](LICENSE)
+[![Go Report Card](https://goreportcard.com/badge/github.com/rvhoyos/quackvps)](https://goreportcard.com/report/github.com/rvhoyos/quackvps)
+[![Buy Me a Coffee](https://img.shields.io/badge/Buy_Me_a_Coffee-support-ffdd00?logo=buymeacoffee&logoColor=black)](https://buymeacoffee.com/monte.carlo.sim)
+
 Set up a modded Minecraft server and its web layer (panel, live map, HTTPS, firewall) on a fresh Ubuntu/Debian VPS.
 
 SSH into your VPS and paste:
 
 ```sh
-curl -fsSL https://github.com/rvhoyos/quackvps/releases/latest/download/quackvps-linux-$(dpkg --print-architecture) -o quackvps && chmod +x quackvps && sudo ./quackvps
+curl -fsSL https://github.com/rvhoyos/quackvps/releases/latest/download/quackvps-linux-$(dpkg --print-architecture) -o /tmp/quackvps && sudo install -m 755 /tmp/quackvps /usr/local/bin/quackvps && sudo quackvps
 ```
 
-Answer the prompts. Every one has a safe default, so you can hit Enter through the whole thing.
+This installs quackvps to `/usr/local/bin`, so afterwards it's just `sudo quackvps`. To uninstall: `sudo rm /usr/local/bin/quackvps`.
+
+Answer the prompts, or press Enter through to accept the defaults.
 
 ## What it does
 
@@ -20,15 +29,39 @@ Answer the prompts. Every one has a safe default, so you can hit Enter through t
   - **BlueMap** live world map.
   - **Simple Voice Chat** proximity voice.
 - Configures Caddy as a reverse proxy. With a domain, each web service gets a subdomain with automatic HTTPS. Without one, services stay on localhost and you get a copy-paste `ssh -L` tunnel command.
-- Configures UFW so enabling it never drops your SSH session, opening only the ports that must be public.
-- Optionally hardens SSH (opt-in, runs first) without locking you out: it walks you through creating a key and verifies it works before disabling passwords.
+- Configures UFW, opening only the ports that must be public and keeping your SSH port open.
+- Optionally hardens SSH to key-only (opt-in, runs first): walks you through a key and verifies it works before turning off password login.
 
-Run it again to add another server. Each one gets its own folder, service, ports, and subdomains, and coexists with the rest. Ports are scanned every run and the next free one is the default.
+Run `sudo quackvps` again to add another server. Each one gets its own folder, service, ports, and subdomains, and coexists with the rest. Ports are scanned every run and the next free one is the default.
+
+Works on a fresh VPS or one already running servers. New installs go in their own folder, service, and ports without touching what's already there, and update and restore work on any existing server, including ones this tool didn't create: mods are identified by hashing the jars, not from records this tool keeps.
 
 ## Requirements
 
-- An Ubuntu/Debian-family VPS, any release. quackvps checks for `apt`, `systemd`, and `ufw` and stops with a clear message if the box is unsupported.
+- An Ubuntu/Debian-family VPS, any release. Needs `apt`, `systemd`, and `ufw`.
 - Run it with `sudo`. The server itself runs as your login user, never as root.
+
+## Modpacks
+
+The wizard offers a curated set per loader, live-filtered to the ones that actually build for your chosen loader and Minecraft version. In headless mode, `--modpack` takes **any Modrinth modpack slug**, so you're not limited to these. A slug is the last path segment of a Modrinth project URL, e.g. `modrinth.com/modpack/`**`cobblemon-fabric`**. The curated picks:
+
+<details>
+<summary>NeoForge (1.21+)</summary>
+
+`quackedsmppack` `the-pixelmon-modpack` `create_plus` `cobblemon-neoforge` `cobblemon-x-creating` `better-mc-neoforge-bmc5` `blockfront-mod-pack` `farming-experience` `keralis-create-pack` `create-complete-by-shalz` `create.ultimate` `create-oneblock` `battlearmorytacz` `reminiscent-create` `old-school-minecraft` `terrafirmacraftmodpack`
+</details>
+
+<details>
+<summary>Forge (1.20.x)</summary>
+
+`the-pixelmon-modpack` `create-live-5` `better-mc-forge-bmc4` `create_plus` `the-lost-era` `medieval-mc-forge-mmc4` `dwellers-modpack` `prehistoric-world-modpack` `parasites-reloaded` `cave-horror-project-modpack` `alaskan-wilderness` `mc-rebalanced` `technical-electrical` `reminiscence` `osmp` `slimes-adventure`
+</details>
+
+<details>
+<summary>Fabric / Quilt</summary>
+
+`cobblemon-fabric` `cobbleverse` `aged` `prominence-2-fabric` `better-mc-fabric-bmc2` `homestead` `harpy-express` `realisticcraft` `landscapes-reimagined-genesis` `sensible-modpack` `ardacraft` `elysium-days` `better-adventures++` `jonathans-cobblemon-pack`
+</details>
 
 ## Flags
 
@@ -42,19 +75,19 @@ Run with no flags for the wizard. These apply to the interactive run:
 
 ## Headless (scripts & CI)
 
-Pass `--mode` to run without prompts. A missing or invalid flag exits non-zero with a clear message — it never falls back to a prompt. Before doing any work, quackvps checks the version and mods you asked for actually exist for your loader, so a typo fails fast instead of half-installing.
+Pass `--mode` to run without prompts. A missing or invalid flag exits non-zero instead of prompting. Versions and mods are validated up front, so a typo fails before anything is installed.
 
 ```sh
 # Install a NeoForge server with a live map and voice chat, no domain (localhost + ssh -L).
-sudo ./quackvps --mode install --parent /home/ubuntu/mc --instance survival \
+sudo quackvps --mode install --parent /home/ubuntu/mc --instance survival \
   --loader neoforge --mcversion 1.21.8 --server-port 25565 --heap-min 2 --heap-max 4 \
   --bluemap --bluemap-port 8100 --voicechat --voicechat-port 24454
 
 # Update that server to a newer Minecraft version (keeps your world and mods).
-sudo ./quackvps --mode update --parent /home/ubuntu/mc --instance survival --mcversion 26.1.2
+sudo quackvps --mode update --parent /home/ubuntu/mc --instance survival --mcversion 26.1.2
 
 # Restore a world backup from the server's backups/ folder.
-sudo ./quackvps --mode restore --parent /home/ubuntu/mc --instance survival \
+sudo quackvps --mode restore --parent /home/ubuntu/mc --instance survival \
   --backup world-20260610-161024.zip
 ```
 
@@ -73,7 +106,7 @@ Every run needs `--mode`, `--parent`, and `--instance`.
 | `--dashboard-port` / `--votifier-port` / `--bluemap-port` / `--voicechat-port` | Port for the matching add-on. |
 | `--domain` / `--email` | Serve web add-ons at `<sub>.<domain>` over HTTPS instead of localhost. |
 | `--dashboard-subdomain` / `--bluemap-subdomain` | Subdomain per web add-on (with `--domain`). |
-| `--harden-ssh` / `--ssh-pubkey` | Harden SSH to key-only. Requires `--ssh-pubkey` or it refuses, so you can't lock yourself out. |
+| `--harden-ssh` / `--ssh-pubkey` | Harden SSH to key-only. `--ssh-pubkey` is required with it. |
 
 **Update** (`--mode update`):
 
