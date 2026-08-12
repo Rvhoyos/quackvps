@@ -19,6 +19,7 @@ import (
 	"github.com/rvhoyos/quackvps/internal/install"
 	"github.com/rvhoyos/quackvps/internal/modrinth"
 	"github.com/rvhoyos/quackvps/internal/prompt"
+	"github.com/rvhoyos/quackvps/internal/restore"
 	"github.com/rvhoyos/quackvps/internal/system"
 	"github.com/rvhoyos/quackvps/internal/ui"
 	"github.com/rvhoyos/quackvps/internal/update"
@@ -77,6 +78,8 @@ func run() error {
 	switch cfg.Mode {
 	case config.ModeUpdate:
 		return update.Run(ctx, cfg, client, confirm)
+	case config.ModeRestore:
+		return restore.Run(ctx, cfg)
 	default:
 		return install.Run(ctx, cfg, client)
 	}

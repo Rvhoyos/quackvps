@@ -21,6 +21,7 @@ type Mode int
 const (
 	ModeInstall Mode = iota // fresh server into <Parent>/<Instance>
 	ModeUpdate              // upgrade an existing instance in place
+	ModeRestore             // restore a world backup into an existing instance
 )
 
 func (m Mode) String() string {
@@ -29,6 +30,8 @@ func (m Mode) String() string {
 		return "install"
 	case ModeUpdate:
 		return "update"
+	case ModeRestore:
+		return "restore"
 	default:
 		return "unknown"
 	}
@@ -91,6 +94,8 @@ type Config struct {
 	HeapMinGB int // -Xms: heap reserved at startup
 	HeapMaxGB int // -Xmx: heap ceiling it may grow to
 
+	Backup string // chosen backup zip to restore (restore mode)
+
 	ServerPort int      // MC game port (UFW TCP)
 	Modpack    string   // Modrinth slug, or "" for none
 	Mods       []string // extra mod slugs, e.g. quackedsmp
@@ -133,12 +138,13 @@ var validLoaders = map[string]bool{
 // Validate checks every invariant the execution packages rely on. It is the
 // single gate: nothing with a side effect should run on a Config that fails it.
 //
-// The checks split by mode. Both flows need a valid target (parent, instance,
-// dir, loader, MC version) and a non-root run-as user. Only install configures
-// RAM, ports, features, and the web layer from the wizard — on update those are
-// read from the existing server on disk, so they aren't validated here.
+// The checks split by mode. Every flow needs a valid target (parent, instance,
+// dir) and a non-root run-as user. Install and update also need a loader and MC
+// version; restore doesn't touch either (it only swaps the world). Only install
+// configures RAM, ports, features, and the web layer from the wizard — on update
+// those are read from the existing server on disk, so they aren't validated here.
 func (c *Config) Validate() error {
-	if c.Mode != ModeInstall && c.Mode != ModeUpdate {
+	if c.Mode != ModeInstall && c.Mode != ModeUpdate && c.Mode != ModeRestore {
 		return fmt.Errorf("mode not set")
 	}
 
@@ -151,19 +157,34 @@ func (c *Config) Validate() error {
 	if want := filepath.Join(c.Parent, c.Instance); c.Dir != want {
 		return fmt.Errorf("dir %q does not match parent/instance %q (call ResolveDir)", c.Dir, want)
 	}
-
-	if !validLoaders[c.Loader] {
-		return fmt.Errorf("unknown loader %q", c.Loader)
-	}
-	if err := validateMCVersion(c.MCVersion); err != nil {
-		return err
-	}
 	if c.RunAsUser == "" || c.RunAsUser == "root" {
 		return fmt.Errorf("run-as user must be a non-root login user, got %q", c.RunAsUser)
 	}
 
-	if c.Mode == ModeInstall {
+	switch c.Mode {
+	case ModeRestore:
+		return c.validateRestore()
+	case ModeInstall:
+		if err := c.validateLoaderAndVersion(); err != nil {
+			return err
+		}
 		return c.validateInstall()
+	default: // ModeUpdate
+		return c.validateLoaderAndVersion()
+	}
+}
+
+func (c *Config) validateLoaderAndVersion() error {
+	if !validLoaders[c.Loader] {
+		return fmt.Errorf("unknown loader %q", c.Loader)
+	}
+	return validateMCVersion(c.MCVersion)
+}
+
+// validateRestore checks the one field restore needs beyond the common target.
+func (c *Config) validateRestore() error {
+	if c.Backup == "" {
+		return fmt.Errorf("no backup selected to restore")
 	}
 	return nil
 }

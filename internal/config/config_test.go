@@ -61,6 +61,30 @@ func TestValidateFailures(t *testing.T) {
 	}
 }
 
+func TestValidateRestore(t *testing.T) {
+	// Restore needs a target and a backup, but no loader or MC version.
+	base := func() *Config {
+		c := New()
+		c.Mode = ModeRestore
+		c.Parent = "/home/ubuntu/mcserver"
+		c.Instance = "survival"
+		c.ResolveDir()
+		c.RunAsUser = "ubuntu"
+		c.Backup = "/home/ubuntu/mcserver/survival/backups/world-20260610-161024.zip"
+		return c
+	}
+
+	if err := base().Validate(); err != nil {
+		t.Fatalf("restore config should be valid without a loader/version: %v", err)
+	}
+
+	c := base()
+	c.Backup = ""
+	if err := c.Validate(); err == nil {
+		t.Error("expected error when no backup is selected")
+	}
+}
+
 func TestValidateWebFeatureNoDomainOK(t *testing.T) {
 	c := valid()
 	c.BlueMap = true

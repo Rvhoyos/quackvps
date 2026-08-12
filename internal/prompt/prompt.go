@@ -30,6 +30,11 @@ func Run(ctx context.Context, cfg *config.Config, client modrinth.Client, picker
 		return nil, err
 	}
 
+	if cfg.Mode == config.ModeRestore {
+		// Restore: the only question is which world backup to put back.
+		return cfg, askBackup(cfg)
+	}
+
 	if cfg.Mode == config.ModeUpdate {
 		// Update: the loader is fixed (detected from disk, never re-chosen); only
 		// the target Minecraft version is asked.

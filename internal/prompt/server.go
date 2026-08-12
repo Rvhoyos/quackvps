@@ -9,6 +9,7 @@ import (
 
 	"github.com/rvhoyos/quackvps/internal/config"
 	"github.com/rvhoyos/quackvps/internal/picker"
+	"github.com/rvhoyos/quackvps/internal/restore"
 )
 
 // askServer picks the parent container, then either takes a name for a new server
@@ -59,25 +60,60 @@ func askInstanceName(parent string) (string, error) {
 	return name, nil
 }
 
-// resolveExisting handles the two-choice branch when the folder already holds a
-// server: update it in place, or abort so the user can pick a different name.
-// Never clobbers.
+// resolveExisting handles the branch when the folder already holds a server:
+// update it in place, restore a world backup, or cancel so the user can pick a
+// different name. Never clobbers.
 func resolveExisting(cfg *config.Config) error {
 	choice := "update"
 	field := huh.NewSelect[string]().
 		Title(fmt.Sprintf("%s already has a server. What now?", cfg.Dir)).
-		Description("Update keeps your world and upgrades the loader/mods. Cancel lets you re-run and choose a different name — we never overwrite an existing server.").
+		Description("Update keeps your world and upgrades the loader/mods. Restore rolls the world back to a saved backup. Cancel lets you re-run and choose a different name — we never overwrite an existing server.").
 		Options(
 			huh.NewOption("Update it in place", "update"),
+			huh.NewOption("Restore a world backup", "restore"),
 			huh.NewOption("Cancel", "cancel"),
 		).
 		Value(&choice)
 	if err := field.Run(); err != nil {
 		return err
 	}
-	if choice == "cancel" {
+	switch choice {
+	case "cancel":
 		return fmt.Errorf("cancelled: re-run and choose a different name for a new server")
+	case "restore":
+		cfg.Mode = config.ModeRestore
+	default:
+		cfg.Mode = config.ModeUpdate
 	}
-	cfg.Mode = config.ModeUpdate
+	return nil
+}
+
+// askBackup lists the instance's world backups and lets the user pick one to
+// restore, newest first. It only gathers the choice into cfg.Backup; the restore
+// itself runs later. No backups means there's nothing to restore, reported clearly.
+func askBackup(cfg *config.Config) error {
+	backups, err := restore.ListBackups(cfg.Dir)
+	if err != nil {
+		return err
+	}
+	if len(backups) == 0 {
+		return fmt.Errorf("no world backups found in %s", filepath.Join(cfg.Dir, "backups"))
+	}
+
+	options := make([]huh.Option[string], len(backups))
+	for i, b := range backups {
+		options[i] = huh.NewOption(b.Label, b.Path)
+	}
+
+	choice := backups[0].Path
+	field := huh.NewSelect[string]().
+		Title("Which backup should we restore?").
+		Description("Your current world is moved aside first, so a bad restore can be undone. The server restarts on the world from the backup you pick.").
+		Options(options...).
+		Value(&choice)
+	if err := field.Run(); err != nil {
+		return err
+	}
+	cfg.Backup = choice
 	return nil
 }

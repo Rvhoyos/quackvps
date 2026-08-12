@@ -41,8 +41,8 @@ func PickInstance(ctx context.Context, parent string) (string, error) {
 func maybeCreateSubfolder(chosen string) (string, error) {
 	create := false
 	prompt := huh.NewConfirm().
-		Title(fmt.Sprintf("Create a new folder inside %s?", chosen)).
-		Description("Pick Yes on a fresh VPS to make the container (e.g. mcserver); No to use this folder as-is.").
+		Title(fmt.Sprintf("Create a new folder inside %s to hold your servers?", chosen)).
+		Description(fmt.Sprintf("The folder you pick here is the container for every server you install; each server lives in its own subfolder inside it. Pick Yes on a fresh VPS to make a clean 'mcserver' container, or No to use %s as-is.", chosen)).
 		Value(&create)
 	if err := prompt.Run(); err != nil {
 		return "", err
