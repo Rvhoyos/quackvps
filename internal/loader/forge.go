@@ -37,16 +37,15 @@ func (f forge) InstallServer(ctx context.Context, dir, mcVersion string) error {
 	return nil
 }
 
-// RunScript writes RAM into user_jvm_args.txt and returns a run.sh that launches
-// through Forge's generated unix_args.txt.
-func (f forge) RunScript(dir string, ramGB int) (string, error) {
+// RunScript writes the heap range into user_jvm_args.txt and returns a run.sh
+// that launches through Forge's generated unix_args.txt.
+func (f forge) RunScript(dir string, minGB, maxGB int) (string, error) {
 	version, err := installedForgeVersion(dir)
 	if err != nil {
 		return "", err
 	}
-	jvmArgs := fmt.Sprintf("-Xms%dG\n-Xmx%dG\n", ramGB, ramGB)
-	if err := os.WriteFile(filepath.Join(dir, "user_jvm_args.txt"), []byte(jvmArgs), 0o644); err != nil {
-		return "", fmt.Errorf("write user_jvm_args.txt: %w", err)
+	if err := writeUserJVMArgs(dir, minGB, maxGB); err != nil {
+		return "", err
 	}
 	body := fmt.Sprintf(
 		"#!/usr/bin/env bash\nexec %s @user_jvm_args.txt @libraries/net/minecraftforge/forge/%s/unix_args.txt \"$@\"\n",

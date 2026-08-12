@@ -27,6 +27,6 @@ func (vanilla) InstallServer(ctx context.Context, dir, mcVersion string) error {
 	return nil
 }
 
-func (v vanilla) RunScript(dir string, ramGB int) (string, error) {
-	return inlineRunScript(v.javaPath, "server.jar", ramGB), nil
+func (v vanilla) RunScript(dir string, minGB, maxGB int) (string, error) {
+	return inlineRunScript(v.javaPath, "server.jar", minGB, maxGB), nil
 }

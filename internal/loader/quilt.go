@@ -37,8 +37,8 @@ func (q quilt) InstallServer(ctx context.Context, dir, mcVersion string) error {
 	return nil
 }
 
-func (q quilt) RunScript(dir string, ramGB int) (string, error) {
-	return inlineRunScript(q.javaPath, "quilt-server-launch.jar", ramGB), nil
+func (q quilt) RunScript(dir string, minGB, maxGB int) (string, error) {
+	return inlineRunScript(q.javaPath, "quilt-server-launch.jar", minGB, maxGB), nil
 }
 
 // quiltInstallerVersion returns the released installer version from Quilt's maven

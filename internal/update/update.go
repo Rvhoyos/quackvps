@@ -98,7 +98,7 @@ func stopAndWait(ctx context.Context, cfg *config.Config, unit string) error {
 // upgrade wipes mods/, reinstalls the loader for the new version, regenerates
 // run.sh (preserving the existing RAM), and re-downloads the resolved mods.
 func upgrade(ctx context.Context, cfg *config.Config, resolved map[string]modrinth.Version) error {
-	ramGB := readRAM(cfg.Dir)
+	minGB, maxGB := readHeap(cfg.Dir)
 
 	javaPath, err := ensureJava(ctx, cfg)
 	if err != nil {
@@ -118,7 +118,7 @@ func upgrade(ctx context.Context, cfg *config.Config, resolved map[string]modrin
 		return err
 	}
 
-	body, err := l.RunScript(cfg.Dir, ramGB)
+	body, err := l.RunScript(cfg.Dir, minGB, maxGB)
 	if err != nil {
 		return err
 	}

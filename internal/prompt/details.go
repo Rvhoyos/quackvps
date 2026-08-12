@@ -219,52 +219,83 @@ func askQuackedSMPSubPrompts(cfg *config.Config) error {
 	return nil
 }
 
-// askRAM takes the heap size in GB. When the box's total memory is known it
-// suggests a safe default and rejects a size that would leave the OS too little
-// to run — an oversized heap makes the JVM crash on the first boot.
+// askRAM takes the JVM heap as two values — the starting heap (-Xms) and the
+// maximum heap (-Xmx), which together form a range. Defaults are recommended by
+// whether the server is modded, and clamped so the suggestion always fits the box.
 func askRAM(cfg *config.Config) error {
 	total := system.TotalMemoryGB()
+	modded := cfg.Loader != config.LoaderVanilla
+	minDef, maxDef := heapDefaults(modded, total)
 
-	def := 4
-	desc := "Modded servers want 4GB+. Too little causes lag and crashes; too much starves other servers on the box."
-	if total > 0 {
-		def = safeDefaultRAM(total)
-		desc = fmt.Sprintf("This box has ~%dGB total — leave at least 1GB for the operating system. Modded servers want 4GB+; too little causes lag and crashes.", total)
-	}
-
-	value := strconv.Itoa(def)
-	field := huh.NewInput().
-		Title("How much RAM for this server? (in GB)").
-		Description(desc).
-		Value(&value).
-		Validate(ramValidator(total))
-	if err := field.Run(); err != nil {
+	minGB, err := askHeap(
+		"Starting heap — RAM reserved at launch (-Xms), in GB",
+		"How much RAM the server grabs at startup and always holds. Keep it below the maximum so an idle server doesn't tie up memory — handy when you run several on one box.",
+		minDef, heapValidator(1, total))
+	if err != nil {
 		return err
 	}
-	cfg.RAMGB = mustAtoi(value)
+
+	maxGB, err := askHeap(
+		"Maximum heap — the ceiling it can grow to (-Xmx), in GB",
+		"The most RAM this server may use. Add ~1GB per 5 players; heavy modpacks want 8-12GB. For a big pack or high player counts, set this equal to the starting heap.",
+		maxDef, heapValidator(minGB, total))
+	if err != nil {
+		return err
+	}
+
+	cfg.HeapMinGB, cfg.HeapMaxGB = minGB, maxGB
 	return nil
 }
 
-// safeDefaultRAM suggests a heap that leaves headroom for the OS, capped at the
-// usual 4GB default.
-func safeDefaultRAM(total int) int {
-	d := total - 2
-	if d < 1 {
-		d = 1
+// askHeap is the shared GB-input prompt for the two heap values, mirroring
+// askPort: pre-filled with the suggested default, parsed after validation.
+func askHeap(title, why string, def int, validate func(string) error) (int, error) {
+	value := strconv.Itoa(def)
+	field := huh.NewInput().
+		Title(title).
+		Description(why).
+		Value(&value).
+		Validate(validate)
+	if err := field.Run(); err != nil {
+		return 0, err
 	}
-	if d > 4 {
-		d = 4
-	}
-	return d
+	return mustAtoi(value), nil
 }
 
-// ramValidator rejects a heap that leaves less than ~1GB for the OS, which would
-// otherwise OOM-crash the JVM on first boot.
-func ramValidator(total int) func(string) error {
+// heapDefaults suggests the (min, max) heap in GB: a light range for a vanilla
+// server, a larger one for a modded server (matching the reference box's 2G/6G).
+// The max is clamped down when the box is small so the default always fits, and
+// the min never exceeds the max.
+func heapDefaults(modded bool, total int) (minGB, maxGB int) {
+	minGB, maxGB = 1, 3
+	if modded {
+		minGB, maxGB = 2, 6
+	}
+	if total > 0 {
+		ceiling := total - 1
+		if ceiling < 1 {
+			ceiling = 1
+		}
+		if maxGB > ceiling {
+			maxGB = ceiling
+		}
+		if minGB > maxGB {
+			minGB = maxGB
+		}
+	}
+	return minGB, maxGB
+}
+
+// heapValidator rejects a heap below floor (1 for -Xms, the chosen -Xms for
+// -Xmx), and one larger than the box can honor while leaving ~1GB for the OS.
+func heapValidator(floor, total int) func(string) error {
 	return func(s string) error {
 		n, err := strconv.Atoi(s)
-		if err != nil || n < 1 {
-			return fmt.Errorf("enter a whole number of at least 1")
+		if err != nil || n < floor {
+			if floor <= 1 {
+				return fmt.Errorf("enter a whole number of at least 1")
+			}
+			return fmt.Errorf("enter a whole number of at least %d (the starting heap)", floor)
 		}
 		if total > 0 && n > total-1 {
 			return fmt.Errorf("this box has only ~%dGB — leave at least 1GB for the OS (max %dGB)", total, total-1)

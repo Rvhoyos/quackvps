@@ -36,9 +36,9 @@ func TestNeoforgePrefix(t *testing.T) {
 }
 
 func TestInlineRunScript(t *testing.T) {
-	got := inlineRunScript("/usr/lib/jvm/temurin-21/bin/java", "server.jar", 4)
-	if !strings.Contains(got, "-Xms4G -Xmx4G") {
-		t.Errorf("missing RAM flags: %q", got)
+	got := inlineRunScript("/usr/lib/jvm/temurin-21/bin/java", "server.jar", 2, 6)
+	if !strings.Contains(got, "-Xms2G -Xmx6G") {
+		t.Errorf("missing heap flags: %q", got)
 	}
 	if !strings.Contains(got, "-jar server.jar nogui") {
 		t.Errorf("missing launch: %q", got)

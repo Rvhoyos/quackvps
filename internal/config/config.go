@@ -88,7 +88,8 @@ type Config struct {
 
 	Loader    string
 	MCVersion string
-	RAMGB     int
+	HeapMinGB int // -Xms: heap reserved at startup
+	HeapMaxGB int // -Xmx: heap ceiling it may grow to
 
 	ServerPort int      // MC game port (UFW TCP)
 	Modpack    string   // Modrinth slug, or "" for none
@@ -111,7 +112,8 @@ type Config struct {
 // New returns a Config with the safe defaults that don't depend on any answer.
 func New() *Config {
 	return &Config{
-		RAMGB:      4,
+		HeapMinGB:  1,
+		HeapMaxGB:  4,
 		Ports:      map[string]int{},
 		Subdomains: map[string]string{},
 	}
@@ -168,8 +170,11 @@ func (c *Config) Validate() error {
 
 // validateInstall checks the fields only a fresh install configures.
 func (c *Config) validateInstall() error {
-	if c.RAMGB < 1 {
-		return fmt.Errorf("ram must be at least 1 GB, got %d", c.RAMGB)
+	if c.HeapMinGB < 1 {
+		return fmt.Errorf("starting heap (-Xms) must be at least 1 GB, got %d", c.HeapMinGB)
+	}
+	if c.HeapMaxGB < c.HeapMinGB {
+		return fmt.Errorf("maximum heap (-Xmx) %d GB must be at least the starting heap %d GB", c.HeapMaxGB, c.HeapMinGB)
 	}
 	if err := validatePort("server", c.ServerPort); err != nil {
 		return err

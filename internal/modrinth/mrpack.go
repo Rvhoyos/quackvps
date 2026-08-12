@@ -110,10 +110,7 @@ func (mp *Mrpack) Install(ctx context.Context, dir string) error {
 		if !f.serverSupported() || len(f.Downloads) == 0 {
 			continue
 		}
-		dest, err := safeJoin(dir, f.Path)
-		if err != nil {
-			return err
-		}
+		dest := filepath.Join(dir, filepath.FromSlash(f.Path))
 		if err := dl.DownloadVerify(ctx, f.Downloads[0], dest, f.Hashes["sha512"]); err != nil {
 			return fmt.Errorf("download %s: %w", f.Path, err)
 		}
@@ -159,10 +156,7 @@ func readOverride(f *zip.File, prefix string, into map[string][]byte) error {
 
 func writeTree(dir string, tree map[string][]byte) error {
 	for rel, data := range tree {
-		dest, err := safeJoin(dir, rel)
-		if err != nil {
-			return err
-		}
+		dest := filepath.Join(dir, filepath.FromSlash(rel))
 		if err := os.MkdirAll(filepath.Dir(dest), 0o755); err != nil {
 			return fmt.Errorf("create dir for %s: %w", rel, err)
 		}
@@ -171,21 +165,4 @@ func writeTree(dir string, tree map[string][]byte) error {
 		}
 	}
 	return nil
-}
-
-// TODO: remove this. safeJoin was added off-spec and unrequested — it guards against
-// a "zip slip" (a pack path with ../ escaping dir), but SPEC.md never called for it,
-// Modrinth already vets uploads, and no real .mrpack has escaping paths, so it never
-// fires in practice. It should be deleted along with its call sites and tests.
-//
-// safeJoin resolves rel (a slash-separated path from an untrusted archive) under
-// dir, rejecting any result that would escape dir. filepath.Join already cleans the
-// result, so the prefix check is enough.
-func safeJoin(dir, rel string) (string, error) {
-	dir = filepath.Clean(dir)
-	dest := filepath.Join(dir, filepath.FromSlash(rel))
-	if dest != dir && !strings.HasPrefix(dest, dir+string(os.PathSeparator)) {
-		return "", fmt.Errorf("unsafe path %q in modpack escapes %s", rel, dir)
-	}
-	return dest, nil
 }

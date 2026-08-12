@@ -35,8 +35,8 @@ func (fabric) InstallServer(ctx context.Context, dir, mcVersion string) error {
 	return nil
 }
 
-func (f fabric) RunScript(dir string, ramGB int) (string, error) {
-	return inlineRunScript(f.javaPath, "fabric-server-launch.jar", ramGB), nil
+func (f fabric) RunScript(dir string, minGB, maxGB int) (string, error) {
+	return inlineRunScript(f.javaPath, "fabric-server-launch.jar", minGB, maxGB), nil
 }
 
 // fabricLatestStable returns the first stable version from a Fabric meta list.

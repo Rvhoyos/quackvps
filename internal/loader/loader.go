@@ -25,9 +25,10 @@ type Loader interface {
 	// headless installer the loader needs.
 	InstallServer(ctx context.Context, dir, mcVersion string) error
 
-	// RunScript returns the body of run.sh for the given RAM. NeoForge also
-	// writes its user_jvm_args.txt into dir as a side effect.
-	RunScript(dir string, ramGB int) (string, error)
+	// RunScript returns the body of run.sh for the given heap range (min = -Xms,
+	// max = -Xmx, in GB). NeoForge and Forge also write their user_jvm_args.txt
+	// into dir as a side effect.
+	RunScript(dir string, minGB, maxGB int) (string, error)
 }
 
 // For returns the loader implementation for a config loader name. javaPath is the
@@ -71,12 +72,32 @@ func Detect(dir string) (string, error) {
 	}
 }
 
-// inlineRunScript is the run.sh used by loaders whose RAM is set with plain java
+// heapArgs is the single place that spells the JVM heap flags, so the inline
+// run.sh and the NeoForge/Forge argfile can't drift apart. min is -Xms (heap
+// reserved at startup), max is -Xmx (the ceiling), both in whole GB.
+func heapArgs(minGB, maxGB int) (xms, xmx string) {
+	return fmt.Sprintf("-Xms%dG", minGB), fmt.Sprintf("-Xmx%dG", maxGB)
+}
+
+// inlineRunScript is the run.sh used by loaders whose heap is set with plain java
 // flags (Fabric, Quilt, Vanilla); NeoForge and Forge use a user_jvm_args.txt
 // argfile instead. jar is the launch jar's filename.
-func inlineRunScript(javaPath, jar string, ramGB int) string {
-	return fmt.Sprintf("#!/usr/bin/env bash\nexec %s -Xms%dG -Xmx%dG -jar %s nogui \"$@\"\n",
-		javaPath, ramGB, ramGB, jar)
+func inlineRunScript(javaPath, jar string, minGB, maxGB int) string {
+	xms, xmx := heapArgs(minGB, maxGB)
+	return fmt.Sprintf("#!/usr/bin/env bash\nexec %s %s %s -jar %s nogui \"$@\"\n",
+		javaPath, xms, xmx, jar)
+}
+
+// writeUserJVMArgs writes the heap range into dir/user_jvm_args.txt, one arg per
+// line — the argfile format NeoForge and Forge read via @user_jvm_args.txt. It's
+// the one owner of that file, shared by both loaders.
+func writeUserJVMArgs(dir string, minGB, maxGB int) error {
+	xms, xmx := heapArgs(minGB, maxGB)
+	contents := xms + "\n" + xmx + "\n"
+	if err := os.WriteFile(filepath.Join(dir, "user_jvm_args.txt"), []byte(contents), 0o644); err != nil {
+		return fmt.Errorf("write user_jvm_args.txt: %w", err)
+	}
+	return nil
 }
 
 // runJavaJar runs a downloaded installer jar with args, in workDir.

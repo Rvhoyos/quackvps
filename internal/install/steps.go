@@ -101,7 +101,7 @@ func warmUpBoot(ctx context.Context, cfg *config.Config) error {
 		_ = system.Stop(ctx, unit)
 		_ = system.WaitInactive(ctx, unit, 130*time.Second)
 		if oom {
-			return fmt.Errorf("the server ran out of memory generating mod configs (%dG heap on a ~%dGB box) — give it less RAM or add swap", cfg.RAMGB, system.TotalMemoryGB())
+			return fmt.Errorf("the server ran out of memory generating mod configs (%dG max heap on a ~%dGB box) — lower the maximum heap or add swap", cfg.HeapMaxGB, system.TotalMemoryGB())
 		}
 		if waitErr != nil {
 			return fmt.Errorf("server didn't finish starting:\n%s\n%w", serverLogTail(cfg.Dir), waitErr)
@@ -249,7 +249,7 @@ func installedProjects(ctx context.Context, client modrinth.Client, dir string) 
 // EULA, and sets the game port — the loader-agnostic first-run-then-configure
 // path.
 func configureServer(ctx context.Context, cfg *config.Config, l loader.Loader) error {
-	body, err := l.RunScript(cfg.Dir, cfg.RAMGB)
+	body, err := l.RunScript(cfg.Dir, cfg.HeapMinGB, cfg.HeapMaxGB)
 	if err != nil {
 		return err
 	}
@@ -279,7 +279,7 @@ func explainFirstRunFailure(cfg *config.Config, err error) error {
 	}
 	switch fre.Kind {
 	case minecraft.FirstRunOOM:
-		ui.Warn("The server ran out of memory on first launch (%dG heap on a ~%dGB box). Give this server less RAM, or add swap to the box.", cfg.RAMGB, system.TotalMemoryGB())
+		ui.Warn("The server ran out of memory on first launch (%dG max heap on a ~%dGB box). Lower this server's maximum heap, or add swap to the box.", cfg.HeapMaxGB, system.TotalMemoryGB())
 	case minecraft.FirstRunTimeout:
 		ui.Warn("The server didn't finish its first run in time — it may be hung.")
 		ui.Info("%s", fre.Tail)

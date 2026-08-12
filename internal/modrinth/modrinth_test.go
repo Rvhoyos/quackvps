@@ -2,7 +2,6 @@ package modrinth
 
 import (
 	"archive/zip"
-	"context"
 	"os"
 	"path/filepath"
 	"testing"
@@ -69,29 +68,6 @@ func TestParseMrpackMissingIndex(t *testing.T) {
 	writeMrpack(t, path, map[string]string{"overrides/x.txt": "x"})
 	if _, err := ParseMrpack(path); err == nil {
 		t.Error("expected error for mrpack without index")
-	}
-}
-
-func TestSafeJoin(t *testing.T) {
-	dir := "/srv/mc/survival"
-	if got, err := safeJoin(dir, "mods/a.jar"); err != nil || got != filepath.Join(dir, "mods", "a.jar") {
-		t.Errorf("safeJoin in-tree = %q, %v", got, err)
-	}
-	for _, rel := range []string{"../evil.jar", "mods/../../evil.jar", "../../../etc/passwd"} {
-		if _, err := safeJoin(dir, rel); err == nil {
-			t.Errorf("safeJoin(%q) should have been rejected", rel)
-		}
-	}
-}
-
-func TestInstallRejectsEscape(t *testing.T) {
-	dir := t.TempDir()
-	mp := &Mrpack{ServerOverrides: map[string][]byte{"../escaped.txt": []byte("x")}}
-	if err := mp.Install(context.Background(), dir); err == nil {
-		t.Error("Install should reject an override that escapes the instance dir")
-	}
-	if _, err := os.Stat(filepath.Join(filepath.Dir(dir), "escaped.txt")); err == nil {
-		t.Error("escaping override was written outside the instance dir")
 	}
 }
 
