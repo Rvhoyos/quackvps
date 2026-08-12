@@ -7,6 +7,7 @@ import (
 
 	"github.com/charmbracelet/huh"
 
+	"github.com/rvhoyos/quackvps/internal/caddy"
 	"github.com/rvhoyos/quackvps/internal/config"
 	"github.com/rvhoyos/quackvps/internal/system"
 	"github.com/rvhoyos/quackvps/internal/web"
@@ -106,24 +107,32 @@ func portHint(c web.Component) string {
 }
 
 // askSubdomains asks a subdomain per web component, but only on the domain path.
+// The default is collision-checked against other instances already using this
+// domain, so a second server defaults to status-<instance> rather than clashing on
+// status.<domain> (which Caddy would later reject as a duplicate site address).
 func askSubdomains(cfg *config.Config) error {
 	if cfg.Domain == "" {
 		return nil
+	}
+	used, err := caddy.UsedSubdomains(cfg.Domain, cfg.Instance)
+	if err != nil {
+		return err
 	}
 	for _, c := range web.Components(cfg.Features) {
 		if !c.IsWeb() {
 			continue
 		}
-		sub := c.DefaultSubdomain()
+		sub := caddy.SubdomainDefault(c.DefaultSubdomain(), cfg.Instance, used)
 		field := huh.NewInput().
 			Title(fmt.Sprintf("Subdomain for %s?", c.Key())).
-			Description(fmt.Sprintf("Reachable at <sub>.%s. Default %q, but pick anything you like.", cfg.Domain, c.DefaultSubdomain())).
+			Description(fmt.Sprintf("Reachable at <sub>.%s. Default %q, but pick anything you like.", cfg.Domain, sub)).
 			Value(&sub).
 			Validate(validateNotEmpty)
 		if err := field.Run(); err != nil {
 			return err
 		}
 		cfg.Subdomains[c.Key()] = sub
+		used[sub] = true // so a second web component can't reuse this label
 	}
 	return nil
 }

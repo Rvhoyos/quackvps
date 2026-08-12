@@ -33,4 +33,8 @@ func printSummary(ctx context.Context, cfg *config.Config) {
 		fmt.Println()
 		fmt.Print(summary)
 	}
+	if dns := web.DNSRecordGuidance(cfg, host); dns != "" {
+		fmt.Println()
+		fmt.Print(dns)
+	}
 }

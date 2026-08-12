@@ -198,3 +198,44 @@ func TestAccessSummary(t *testing.T) {
 		t.Errorf("expected exactly one ssh command:\n%s", got)
 	}
 }
+
+func TestDNSRecordGuidance(t *testing.T) {
+	cfg := config.New()
+	cfg.Instance = "survival"
+	cfg.Features = config.Features{Dashboard: true, BlueMap: true}
+	cfg.Subdomains = map[string]string{"dashboard": "status", "bluemap": "map"}
+
+	// No domain → no records to create.
+	if got := DNSRecordGuidance(cfg, "1.2.3.4"); got != "" {
+		t.Errorf("no-domain path should print nothing, got:\n%s", got)
+	}
+
+	cfg.Domain = "example.com"
+
+	// Non-standard game port → SRV record present.
+	cfg.ServerPort = 25567
+	got := DNSRecordGuidance(cfg, "1.2.3.4")
+	for _, want := range []string{
+		"1.2.3.4",
+		"A    status.example.com",
+		"A    map.example.com",
+		"A    survival.example.com",
+		"SRV  _minecraft._tcp.survival.example.com",
+		"port 25567",
+		"target survival.example.com",
+	} {
+		if !strings.Contains(got, want) {
+			t.Errorf("guidance missing %q:\n%s", want, got)
+		}
+	}
+
+	// Standard game port → the join A record stays, but no SRV record.
+	cfg.ServerPort = 25565
+	got = DNSRecordGuidance(cfg, "1.2.3.4")
+	if !strings.Contains(got, "A    survival.example.com") {
+		t.Errorf("standard-port guidance missing the join A record:\n%s", got)
+	}
+	if strings.Contains(got, "SRV") || strings.Contains(got, "_minecraft._tcp") {
+		t.Errorf("standard port should get no SRV record:\n%s", got)
+	}
+}

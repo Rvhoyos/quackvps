@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/rvhoyos/quackvps/internal/caddy"
 	"github.com/rvhoyos/quackvps/internal/catalog"
 	"github.com/rvhoyos/quackvps/internal/config"
 	"github.com/rvhoyos/quackvps/internal/loader"
@@ -93,13 +94,30 @@ func configureInstall(cfg *config.Config, opts Options) error {
 		config.PortDashboard: opts.DashboardSubdomain,
 		config.PortBlueMap:   opts.BlueMapSubdomain,
 	}
+	// An omitted --*-subdomain falls back to the same collision-safe default the
+	// wizard prefills: the bare label, bumped to <label>-<instance> if another
+	// instance already claimed it on this domain.
+	var used map[string]bool
+	if cfg.Domain != "" {
+		u, err := caddy.UsedSubdomains(cfg.Domain, cfg.Instance)
+		if err != nil {
+			return err
+		}
+		used = u
+	}
 	for _, c := range web.Components(cfg.Features) {
 		if p := ports[c.Key()]; p != 0 {
 			cfg.Ports[c.Key()] = p
 		}
-		if c.IsWeb() && subs[c.Key()] != "" {
-			cfg.Subdomains[c.Key()] = subs[c.Key()]
+		if !c.IsWeb() || cfg.Domain == "" {
+			continue
 		}
+		sub := subs[c.Key()]
+		if sub == "" {
+			sub = caddy.SubdomainDefault(c.DefaultSubdomain(), cfg.Instance, used)
+		}
+		cfg.Subdomains[c.Key()] = sub
+		used[sub] = true
 	}
 
 	if opts.HardenSSH {

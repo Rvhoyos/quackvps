@@ -1,6 +1,8 @@
 package caddy
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -66,6 +68,62 @@ func TestWithImportLine(t *testing.T) {
 			t.Errorf("import should be after the global block even with leading comments:\n%s", got)
 		}
 	})
+}
+
+func TestUsedSubdomains(t *testing.T) {
+	dir := t.TempDir()
+	old := InstanceDir
+	InstanceDir = dir
+	defer func() { InstanceDir = old }()
+
+	// A prior instance holds status + map on this domain.
+	os.WriteFile(filepath.Join(dir, "buns.caddy"),
+		[]byte("status.example.com {\n\treverse_proxy 127.0.0.1:8126\n}\nmap.example.com {\n\treverse_proxy 127.0.0.1:8101\n}\n"), 0o644)
+	// A different domain must not leak into the set.
+	os.WriteFile(filepath.Join(dir, "other.caddy"),
+		[]byte("panel.other.net {\n\treverse_proxy 127.0.0.1:9000\n}\n"), 0o644)
+
+	used, err := UsedSubdomains("example.com", "survival")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !used["status"] || !used["map"] {
+		t.Errorf("expected status+map claimed, got %v", used)
+	}
+	if used["panel"] {
+		t.Errorf("a different domain's label leaked in: %v", used)
+	}
+
+	// The current instance's own file is excluded, so a re-run doesn't clash with
+	// itself: "creeper" claims "live", but excluding creeper hides it.
+	os.WriteFile(filepath.Join(dir, "creeper.caddy"),
+		[]byte("live.example.com {\n\treverse_proxy 127.0.0.1:8127\n}\n"), 0o644)
+	used, err = UsedSubdomains("example.com", "creeper")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if used["live"] {
+		t.Errorf("the excluded instance's own label should not be claimed: %v", used)
+	}
+	if !used["status"] {
+		t.Errorf("another instance's label should still be claimed: %v", used)
+	}
+
+	// A missing InstanceDir is not an error.
+	InstanceDir = filepath.Join(dir, "does-not-exist")
+	if used, err := UsedSubdomains("example.com", ""); err != nil || len(used) != 0 {
+		t.Errorf("missing dir should give empty set, no error: used=%v err=%v", used, err)
+	}
+}
+
+func TestSubdomainDefault(t *testing.T) {
+	used := map[string]bool{"status": true}
+	if got := SubdomainDefault("map", "buns", used); got != "map" {
+		t.Errorf("free label should be the base, got %q", got)
+	}
+	if got := SubdomainDefault("status", "buns", used); got != "status-buns" {
+		t.Errorf("taken label should bump to base-instance, got %q", got)
+	}
 }
 
 func TestGlobalBlockEnd(t *testing.T) {
