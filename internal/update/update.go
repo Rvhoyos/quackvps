@@ -24,8 +24,9 @@ import (
 // it to a real prompt; automation can pass one that always returns true.
 type ConfirmFunc func(question string) (bool, error)
 
-// stopTimeout bounds the graceful shutdown wait. It matches the unit's
-// TimeoutStopSec so we give the world a full chance to save before giving up.
+// stopTimeout bounds the graceful shutdown wait. It's deliberately a little
+// longer than the unit's TimeoutStopSec (120s) so systemd's own graceful stop —
+// letting the world finish saving — has time to complete before we give up.
 const stopTimeout = 130 * time.Second
 
 // Run performs the in-place update described by cfg (already validated). client

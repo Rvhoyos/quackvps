@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 )
 
@@ -39,6 +40,23 @@ func EnableStart(ctx context.Context, unit string) error {
 
 func Start(ctx context.Context, unit string) error { return Run(ctx, "systemctl", "start", unit) }
 func Stop(ctx context.Context, unit string) error  { return Run(ctx, "systemctl", "stop", unit) }
+
+// UnitOOMKilled reports whether systemd recorded the unit's last run ending in an
+// out-of-memory kill. An OOM-kill leaves no JVM crash dump, so this is how we tell a
+// warm-up boot that died on memory apart from one that merely crashed.
+func UnitOOMKilled(ctx context.Context, unit string) bool {
+	out, err := Capture(ctx, "systemctl", "show", unit, "-p", "Result", "--value")
+	return err == nil && strings.TrimSpace(out) == "oom-kill"
+}
+
+// RemoveUnit stops and disables a unit, deletes its file, and reloads systemd.
+// It's best-effort — used to roll back a failed install — so each step's error is
+// ignored; the goal is simply to leave nothing behind.
+func RemoveUnit(ctx context.Context, unit string) {
+	_ = Run(ctx, "systemctl", "disable", "--now", unit)
+	_ = os.Remove(filepath.Join(unitDir, unit))
+	_ = DaemonReload(ctx)
+}
 
 // IsActive reports whether a unit is currently running.
 func IsActive(ctx context.Context, unit string) bool {

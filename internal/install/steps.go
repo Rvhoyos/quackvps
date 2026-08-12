@@ -2,6 +2,7 @@ package install
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -93,9 +94,15 @@ func warmUpBoot(ctx context.Context, cfg *config.Config) error {
 			return err
 		}
 		waitErr := system.WaitForFiles(ctx, wanted, warmUpTimeout)
+		// Check the unit's Result before stopping it — stopping resets it, and an
+		// out-of-memory kill leaves no log to tail otherwise.
+		oom := waitErr != nil && system.UnitOOMKilled(ctx, unit)
 		// Always stop the warm-up server before returning, success or not.
 		_ = system.Stop(ctx, unit)
 		_ = system.WaitInactive(ctx, unit, 130*time.Second)
+		if oom {
+			return fmt.Errorf("the server ran out of memory generating mod configs (%dG heap on a ~%dGB box) — give it less RAM or add swap", cfg.RAMGB, system.TotalMemoryGB())
+		}
 		if waitErr != nil {
 			return fmt.Errorf("server didn't finish starting:\n%s\n%w", serverLogTail(cfg.Dir), waitErr)
 		}
@@ -252,12 +259,39 @@ func configureServer(ctx context.Context, cfg *config.Config, l loader.Loader) e
 	if err := ui.Spinner("Generating server files (first run)", func() error {
 		return minecraft.FirstRunGenerate(ctx, cfg.Dir)
 	}); err != nil {
-		return err
+		return explainFirstRunFailure(cfg, err)
 	}
 	if err := minecraft.AcceptEULA(cfg.Dir); err != nil {
 		return err
 	}
 	return minecraft.SetServerPort(cfg.Dir, cfg.ServerPort)
+}
+
+// explainFirstRunFailure turns a failed first-run boot into an actionable message
+// and returns ErrHandled so it's printed exactly once. A crash with a modpack
+// selected is the one case worth reporting upstream — the pack won't start — so we
+// name it and ask for a report; an out-of-memory kill is the box's fault, not the
+// pack's, so it never asks for one.
+func explainFirstRunFailure(cfg *config.Config, err error) error {
+	var fre *minecraft.FirstRunError
+	if !errors.As(err, &fre) {
+		return err
+	}
+	switch fre.Kind {
+	case minecraft.FirstRunOOM:
+		ui.Warn("The server ran out of memory on first launch (%dG heap on a ~%dGB box). Give this server less RAM, or add swap to the box.", cfg.RAMGB, system.TotalMemoryGB())
+	case minecraft.FirstRunTimeout:
+		ui.Warn("The server didn't finish its first run in time — it may be hung.")
+		ui.Info("%s", fre.Tail)
+	default:
+		if cfg.Modpack != "" {
+			ui.Warn("The modpack %q failed to start on %s %s — please report it so we can drop it from the list.", cfg.Modpack, cfg.Loader, cfg.MCVersion)
+		} else {
+			ui.Warn("The server crashed on first launch.")
+		}
+		ui.Info("%s", fre.Tail)
+	}
+	return ErrHandled
 }
 
 // writeWebConfigs writes each add-on's port into its own config, plus the two

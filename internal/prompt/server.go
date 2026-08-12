@@ -13,9 +13,9 @@ import (
 
 // askServer picks the parent container, then either takes a name for a new server
 // or, if the chosen name already holds one, offers to update it in place. It sets
-// Mode, Parent, Instance, and Dir.
-func askServer(ctx context.Context, cfg *config.Config) error {
-	parent, err := picker.PickParent(ctx, cfg.RunAsHome)
+// Mode, Parent, Instance, and Dir. pickerStart is where the tree browser opens.
+func askServer(ctx context.Context, cfg *config.Config, pickerStart string) error {
+	parent, err := picker.PickParent(ctx, pickerStart)
 	if err != nil {
 		return err
 	}

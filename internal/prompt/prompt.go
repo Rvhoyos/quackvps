@@ -20,12 +20,13 @@ import (
 )
 
 // Run drives the wizard, filling cfg. cfg arrives with the fields main already
-// knows (RunAsUser/RunAsHome). The caller validates the result before executing.
-func Run(ctx context.Context, cfg *config.Config, client modrinth.Client) (*config.Config, error) {
+// knows (RunAsUser/RunAsHome). pickerStart is the folder the directory picker
+// opens at. The caller validates the result before executing.
+func Run(ctx context.Context, cfg *config.Config, client modrinth.Client, pickerStart string) (*config.Config, error) {
 	if err := askHardenSSH(ctx, cfg); err != nil {
 		return nil, err
 	}
-	if err := askServer(ctx, cfg); err != nil {
+	if err := askServer(ctx, cfg, pickerStart); err != nil {
 		return nil, err
 	}
 

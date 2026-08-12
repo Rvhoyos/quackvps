@@ -27,10 +27,11 @@ func (q quilt) InstallServer(ctx context.Context, dir, mcVersion string) error {
 	if err := dl.Download(ctx, url, jar); err != nil {
 		return fmt.Errorf("download quilt installer: %w", err)
 	}
-	// Installs into dir and downloads the Minecraft server, producing
-	// quilt-server-launch.jar.
+	// Downloads the Minecraft server and produces quilt-server-launch.jar. Without
+	// --install-dir the installer drops everything in a ./server subfolder, away
+	// from mods/ and the run.sh that launches quilt-server-launch.jar from the root.
 	if err := runJavaJar(ctx, q.javaPath, "quilt-installer.jar", dir,
-		"install", "server", mcVersion, "--download-server"); err != nil {
+		"install", "server", mcVersion, "--download-server", "--install-dir="+dir); err != nil {
 		return fmt.Errorf("run quilt installer: %w", err)
 	}
 	return nil

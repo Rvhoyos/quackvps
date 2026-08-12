@@ -113,7 +113,6 @@ func featured(loader string) []featuredPack {
 			{"ardacraft", "ArdaCraft"},
 			{"elysium-days", "Elysium Days"},
 			{"better-adventures++", "Better Adventures++"},
-			{"conquest-reforged-modpack", "Conquest Reforged"},
 			{"jonathans-cobblemon-pack", "Cobblemon Expanded"},
 		}
 	default:

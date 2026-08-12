@@ -6,6 +6,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"os/signal"
@@ -25,7 +26,10 @@ import (
 
 func main() {
 	if err := run(); err != nil {
-		ui.Error("%v", err)
+		// ErrHandled means the failure was already fully explained; just exit.
+		if !errors.Is(err, install.ErrHandled) {
+			ui.Error("%v", err)
+		}
 		os.Exit(1)
 	}
 }
@@ -53,12 +57,17 @@ func run() error {
 		return err
 	}
 	cfg.RunAsUser, cfg.RunAsHome = user, home
+
+	// The picker opens at the user's home by default; --dir only changes that
+	// starting folder. It must not touch RunAsHome, which is where the SSH key
+	// lives.
+	pickerStart := cfg.RunAsHome
 	if opts.Dir != "" {
-		cfg.RunAsHome = opts.Dir // start the picker here instead of the home dir
+		pickerStart = opts.Dir
 	}
 
 	client := modrinth.New()
-	if _, err := prompt.Run(ctx, cfg, client); err != nil {
+	if _, err := prompt.Run(ctx, cfg, client, pickerStart); err != nil {
 		return err
 	}
 	if err := cfg.Validate(); err != nil {

@@ -72,7 +72,8 @@ func Detect(dir string) (string, error) {
 }
 
 // inlineRunScript is the run.sh used by loaders whose RAM is set with plain java
-// flags (everything except NeoForge). jar is the launch jar's filename.
+// flags (Fabric, Quilt, Vanilla); NeoForge and Forge use a user_jvm_args.txt
+// argfile instead. jar is the launch jar's filename.
 func inlineRunScript(javaPath, jar string, ramGB int) string {
 	return fmt.Sprintf("#!/usr/bin/env bash\nexec %s -Xms%dG -Xmx%dG -jar %s nogui \"$@\"\n",
 		javaPath, ramGB, ramGB, jar)

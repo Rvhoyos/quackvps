@@ -6,6 +6,7 @@ package install
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 
@@ -18,9 +19,13 @@ import (
 	"github.com/rvhoyos/quackvps/internal/ui"
 )
 
+// ErrHandled marks a failure whose full explanation has already been printed (for
+// example a modpack that wouldn't boot), so main exits without printing it again.
+var ErrHandled = errors.New("install failed")
+
 // Run performs the install described by cfg, which must already have passed
 // config.Validate.
-func Run(ctx context.Context, cfg *config.Config, client modrinth.Client) error {
+func Run(ctx context.Context, cfg *config.Config, client modrinth.Client) (err error) {
 	// Pre-flight: confirm every mod and the modpack actually have a build for this
 	// loader + version BEFORE doing anything irreversible (hardening, JDK install,
 	// running the loader installer). The wizard already gates these, but the
@@ -48,6 +53,19 @@ func Run(ctx context.Context, cfg *config.Config, client modrinth.Client) error 
 	if err != nil {
 		return err
 	}
+
+	// From here on we write to disk. If any later step fails, roll the whole install
+	// back so a broken half-install never lingers — but only remove what this run
+	// created; a directory the user already had is left untouched.
+	_, statErr := os.Stat(cfg.Dir)
+	createdDir := os.IsNotExist(statErr)
+	wroteUnit := false
+	defer func() {
+		if err != nil {
+			rollback(cfg, createdDir, wroteUnit)
+		}
+	}()
+
 	if err := os.MkdirAll(cfg.Dir, 0o755); err != nil {
 		return fmt.Errorf("create %s: %w", cfg.Dir, err)
 	}
@@ -71,6 +89,7 @@ func Run(ctx context.Context, cfg *config.Config, client modrinth.Client) error 
 	if err := installService(ctx, cfg); err != nil {
 		return err
 	}
+	wroteUnit = true
 	// Hand the tree to the login user before the service (running as that user)
 	// boots it.
 	if err := system.ChownRecursive(cfg.Dir, cfg.RunAsUser); err != nil {
@@ -109,6 +128,22 @@ func Run(ctx context.Context, cfg *config.Config, client modrinth.Client) error 
 
 	printSummary(ctx, cfg)
 	return nil
+}
+
+// rollback removes what a failed install created — its systemd unit and its instance
+// directory — so the box is left clean and the name is free to reuse. It touches only
+// what this run made (guarded by the flags), never pre-existing data, and runs on a
+// fresh context so it still completes even if the install was cancelled mid-way.
+func rollback(cfg *config.Config, createdDir, wroteUnit bool) {
+	ctx := context.Background()
+	if wroteUnit {
+		system.RemoveUnit(ctx, minecraft.UnitName(cfg.Instance)+".service")
+	}
+	if createdDir {
+		if err := os.RemoveAll(cfg.Dir); err == nil {
+			ui.Info("cleaned up %s", cfg.Dir)
+		}
+	}
 }
 
 func ensureJava(ctx context.Context, cfg *config.Config) (string, error) {
