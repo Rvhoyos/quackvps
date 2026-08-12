@@ -1,8 +1,7 @@
-// Package ui is the tool's output voice: section headers, status lines, a
-// spinner for long steps, and the teaching triplet (what / why / suggestion)
-// that the installer prints as it works. It only writes output — it never
-// prompts. Color degrades automatically when stdout isn't a terminal, and the
-// spinner animates only on a TTY so piped/CI output stays clean.
+// Package ui is the tool's output voice: section headers, status lines, and a
+// spinner for long steps. It only writes output — it never prompts. Color
+// degrades automatically when stdout isn't a terminal, and the spinner animates
+// only on a TTY so piped/CI output stays clean.
 package ui
 
 import (
@@ -19,7 +18,6 @@ var (
 	warnStyle    = lipgloss.NewStyle().Foreground(lipgloss.Color("3"))
 	successStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("2"))
 	errorStyle   = lipgloss.NewStyle().Foreground(lipgloss.Color("1"))
-	dimStyle     = lipgloss.NewStyle().Faint(true)
 )
 
 // Step prints a section header for a distinct phase of the run.
@@ -48,19 +46,6 @@ func Error(format string, args ...any) {
 func Bullet(items ...string) {
 	for _, it := range items {
 		fmt.Println("  • " + it)
-	}
-}
-
-// Teach prints the three-part teaching line used outside of prompts: what a step
-// is, why it matters, and the value we're using. Inside prompts, huh carries the
-// same three parts (title / description / default).
-func Teach(what, why, suggestion string) {
-	fmt.Println(headerStyle.Render(what))
-	if why != "" {
-		fmt.Println(dimStyle.Render("  " + why))
-	}
-	if suggestion != "" {
-		fmt.Println(dimStyle.Render("  using: " + suggestion))
 	}
 }
 

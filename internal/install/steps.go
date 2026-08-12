@@ -189,7 +189,7 @@ func installMod(ctx context.Context, cfg *config.Config, client modrinth.Client,
 // downloadWithDeps downloads v and its required dependencies, skipping any
 // project already present and recording each one so later mods dedup too.
 func downloadWithDeps(ctx context.Context, cfg *config.Config, client modrinth.Client, v modrinth.Version, installed map[string]bool) error {
-	for _, want := range append([]modrinth.Version{v}, mustResolveDeps(ctx, cfg, client, v)...) {
+	for _, want := range append([]modrinth.Version{v}, resolveDepsBestEffort(ctx, cfg, client, v)...) {
 		if installed[want.ProjectID] {
 			continue
 		}
@@ -201,7 +201,7 @@ func downloadWithDeps(ctx context.Context, cfg *config.Config, client modrinth.C
 	return nil
 }
 
-func mustResolveDeps(ctx context.Context, cfg *config.Config, client modrinth.Client, v modrinth.Version) []modrinth.Version {
+func resolveDepsBestEffort(ctx context.Context, cfg *config.Config, client modrinth.Client, v modrinth.Version) []modrinth.Version {
 	deps, err := modrinth.ResolveRequired(ctx, client, v, []string{cfg.Loader}, []string{cfg.MCVersion})
 	if err != nil {
 		// Dependency resolution is best-effort; a missing optional dep shouldn't

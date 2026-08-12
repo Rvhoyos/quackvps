@@ -25,22 +25,6 @@ const (
 	SlugVoiceChat = "simple-voice-chat"
 )
 
-// ModOffer is a mod the wizard can offer to install. v1 pins only QuackedSMP.
-type ModOffer struct {
-	Slug  string
-	Title string
-	Note  string // the "why" shown alongside the prompt
-}
-
-// Mods returns the mods offered, most relevant first.
-func Mods() []ModOffer {
-	return []ModOffer{{
-		Slug:  SlugQuackedSMP,
-		Title: "QuackedSMP",
-		Note:  "Raul's server mod: adds the web dashboard, claims/homes, votifier, and voice-chat hooks.",
-	}}
-}
-
 // ModpackOffer is a curated modpack the user can install for the chosen loader +
 // MC version. Only installable ones are offered.
 type ModpackOffer struct {
