@@ -3,7 +3,6 @@ package loader
 import (
 	"context"
 	"fmt"
-	"os"
 	"path/filepath"
 
 	"github.com/rvhoyos/quackvps/internal/config"
@@ -37,20 +36,10 @@ func (f forge) InstallServer(ctx context.Context, dir, mcVersion string) error {
 	return nil
 }
 
-// RunScript writes the heap range into user_jvm_args.txt and returns a run.sh
-// that launches through Forge's generated unix_args.txt.
+// RunScript writes the heap range into user_jvm_args.txt and pins the JDK in the
+// run.sh the installer generated.
 func (f forge) RunScript(dir string, minGB, maxGB int) (string, error) {
-	version, err := installedForgeVersion(dir)
-	if err != nil {
-		return "", err
-	}
-	if err := writeUserJVMArgs(dir, minGB, maxGB); err != nil {
-		return "", err
-	}
-	body := fmt.Sprintf(
-		"#!/usr/bin/env bash\nexec %s @user_jvm_args.txt @libraries/net/minecraftforge/forge/%s/unix_args.txt \"$@\"\n",
-		f.javaPath, version)
-	return body, nil
+	return argfileRunScript(dir, f.javaPath, minGB, maxGB)
 }
 
 // forgeVersion resolves the Forge build for a Minecraft version from Forge's
@@ -80,20 +69,4 @@ func forgePromotions(ctx context.Context) (map[string]string, error) {
 		return nil, fmt.Errorf("fetch forge promotions: %w", err)
 	}
 	return resp.Promos, nil
-}
-
-// installedForgeVersion finds the version directory the installer created (named
-// "<mc>-<forge>"), so run.sh references the right unix_args.txt.
-func installedForgeVersion(dir string) (string, error) {
-	base := filepath.Join(dir, "libraries", "net", "minecraftforge", "forge")
-	entries, err := os.ReadDir(base)
-	if err != nil {
-		return "", fmt.Errorf("read forge libraries in %s: %w", dir, err)
-	}
-	for _, e := range entries {
-		if e.IsDir() {
-			return e.Name(), nil
-		}
-	}
-	return "", fmt.Errorf("no Forge version directory under %s", base)
 }

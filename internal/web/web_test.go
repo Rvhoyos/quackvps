@@ -130,6 +130,48 @@ func TestSetHOCONKeyEditsAndErrors(t *testing.T) {
 	}
 }
 
+func TestBlueMapPresent(t *testing.T) {
+	dir := t.TempDir()
+	if BlueMapPresent(dir) {
+		t.Error("BlueMapPresent should be false with no config/bluemap")
+	}
+	os.MkdirAll(filepath.Join(dir, "config", "bluemap"), 0o755)
+	if !BlueMapPresent(dir) {
+		t.Error("BlueMapPresent should be true once config/bluemap exists")
+	}
+}
+
+func TestResetBlueMapMaps(t *testing.T) {
+	dir := t.TempDir()
+	base := filepath.Join(dir, "config", "bluemap")
+	maps := filepath.Join(base, "maps")
+	os.MkdirAll(maps, 0o755)
+	// The files an update must reset...
+	for _, m := range []string{"world.conf", "world_the_nether.conf", "world_the_end.conf"} {
+		os.WriteFile(filepath.Join(maps, m), []byte("max-y: 90\n"), 0o644)
+	}
+	// ...and the ones it must leave alone (they carry our edits).
+	os.WriteFile(filepath.Join(base, "core.conf"), []byte("accept-download: true\n"), 0o644)
+	os.WriteFile(filepath.Join(base, "webserver.conf"), []byte("port: 8100\n"), 0o644)
+
+	if err := ResetBlueMapMaps(dir); err != nil {
+		t.Fatal(err)
+	}
+	if left, _ := filepath.Glob(filepath.Join(maps, "*.conf")); len(left) != 0 {
+		t.Errorf("map configs not reset: %v", left)
+	}
+	for _, keep := range []string{"core.conf", "webserver.conf"} {
+		if _, err := os.Stat(filepath.Join(base, keep)); err != nil {
+			t.Errorf("ResetBlueMapMaps removed %s, which it must not touch", keep)
+		}
+	}
+
+	// A server without BlueMap's maps dir is not an error.
+	if err := ResetBlueMapMaps(t.TempDir()); err != nil {
+		t.Errorf("ResetBlueMapMaps on an absent maps dir should be a no-op, got %v", err)
+	}
+}
+
 func TestAccessSummary(t *testing.T) {
 	cfg := config.New()
 	cfg.Features = config.Features{Dashboard: true, BlueMap: true, VoiceChat: true}

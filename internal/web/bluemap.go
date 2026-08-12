@@ -1,6 +1,8 @@
 package web
 
 import (
+	"fmt"
+	"os"
 	"path/filepath"
 	"strconv"
 
@@ -34,4 +36,31 @@ func (b bluemap) WritePort(dir string, port int) error {
 
 func (b bluemap) CaddyBlock(subdomain, domain string, port int) string {
 	return caddyBlock(subdomain, domain, port)
+}
+
+// BlueMapPresent reports whether BlueMap is installed in an instance, by the
+// presence of its config directory — so an update knows it will upgrade BlueMap
+// without relying on our own records or a hardcoded Modrinth id.
+func BlueMapPresent(dir string) bool {
+	info, err := os.Stat(filepath.Join(dir, "config", "bluemap"))
+	return err == nil && info.IsDir()
+}
+
+// ResetBlueMapMaps deletes the map configs under config/bluemap/maps so an upgraded
+// BlueMap regenerates fresh defaults on its next boot. BlueMap only writes a default
+// when the file is absent and refuses to auto-migrate an outdated one, so a version
+// jump that changes the map-config schema needs the old files gone. It touches only
+// the map configs — never core.conf/webserver.conf, which carry our port and
+// accept-download edits. A missing maps directory is not an error.
+func ResetBlueMapMaps(dir string) error {
+	confs, err := filepath.Glob(filepath.Join(dir, "config", "bluemap", "maps", "*.conf"))
+	if err != nil {
+		return fmt.Errorf("list bluemap map configs: %w", err)
+	}
+	for _, conf := range confs {
+		if err := os.Remove(conf); err != nil {
+			return fmt.Errorf("reset bluemap map config %s: %w", filepath.Base(conf), err)
+		}
+	}
+	return nil
 }

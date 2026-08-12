@@ -101,8 +101,14 @@ func preflight() error {
 // (wiping mods/). It lives here so the update package stays free of the prompt
 // library.
 func confirm(question string) (bool, error) {
-	answer := false
-	field := huh.NewConfirm().Title(question).Value(&answer)
+	// Default to keeping mods — the expected action; the empty-mods path is the
+	// deliberate opt-out, never something a stray Enter should trigger.
+	answer := true
+	field := huh.NewConfirm().
+		Title(question).
+		Affirmative("Yes — upgrade my mods").
+		Negative("No — empty mods folder").
+		Value(&answer)
 	if err := field.Run(); err != nil {
 		return false, err
 	}

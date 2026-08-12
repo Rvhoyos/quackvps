@@ -3,7 +3,6 @@ package loader
 import (
 	"context"
 	"fmt"
-	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -38,19 +37,9 @@ func (n neoforge) InstallServer(ctx context.Context, dir, mcVersion string) erro
 }
 
 // RunScript writes the heap range into user_jvm_args.txt (NeoForge's argfile) and
-// returns a run.sh that launches through NeoForge's generated unix_args.txt.
+// pins the JDK in the run.sh the installer generated.
 func (n neoforge) RunScript(dir string, minGB, maxGB int) (string, error) {
-	version, err := installedNeoForgeVersion(dir)
-	if err != nil {
-		return "", err
-	}
-	if err := writeUserJVMArgs(dir, minGB, maxGB); err != nil {
-		return "", err
-	}
-	body := fmt.Sprintf(
-		"#!/usr/bin/env bash\nexec %s @user_jvm_args.txt @libraries/net/neoforged/neoforge/%s/unix_args.txt \"$@\"\n",
-		n.javaPath, version)
-	return body, nil
+	return argfileRunScript(dir, n.javaPath, minGB, maxGB)
 }
 
 // neoforgeVersion picks the newest NeoForge build for a Minecraft version.
@@ -134,20 +123,4 @@ func neoforgeBuildToMC(build string) string {
 		mc = "1." + parts[0] + "." + parts[1]
 	}
 	return strings.TrimSuffix(mc, ".0")
-}
-
-// installedNeoForgeVersion finds the version directory the installer created, so
-// run.sh references the right unix_args.txt. Works on any server, not just ours.
-func installedNeoForgeVersion(dir string) (string, error) {
-	base := filepath.Join(dir, "libraries", "net", "neoforged", "neoforge")
-	entries, err := os.ReadDir(base)
-	if err != nil {
-		return "", fmt.Errorf("read neoforge libraries in %s: %w", dir, err)
-	}
-	for _, e := range entries {
-		if e.IsDir() {
-			return e.Name(), nil
-		}
-	}
-	return "", fmt.Errorf("no NeoForge version directory under %s", base)
 }

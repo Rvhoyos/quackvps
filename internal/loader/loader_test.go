@@ -48,6 +48,58 @@ func TestInlineRunScript(t *testing.T) {
 	}
 }
 
+func TestArgfileRunScript(t *testing.T) {
+	const java = "/usr/lib/jvm/temurin-25/bin/java"
+	// NeoForge ships "exec java @…", Forge ships "java @…"; the pin must swap only
+	// the executable and leave the rest of each installer-generated line intact.
+	tests := []struct {
+		name, generated, wantLine string
+	}{
+		{
+			"neoforge",
+			"#!/usr/bin/env sh\nexec java @user_jvm_args.txt @libraries/net/neoforged/neoforge/26.1.2.95/unix_args.txt \"$@\"\n",
+			"exec " + java + " @user_jvm_args.txt @libraries/net/neoforged/neoforge/26.1.2.95/unix_args.txt \"$@\"",
+		},
+		{
+			"forge",
+			"#!/usr/bin/env sh\njava @user_jvm_args.txt @libraries/net/minecraftforge/forge/1.20.1-47.4.0/unix_args.txt \"$@\"\n",
+			java + " @user_jvm_args.txt @libraries/net/minecraftforge/forge/1.20.1-47.4.0/unix_args.txt \"$@\"",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			dir := t.TempDir()
+			os.WriteFile(filepath.Join(dir, "run.sh"), []byte(tt.generated), 0o755)
+
+			body, err := argfileRunScript(dir, java, 2, 6)
+			if err != nil {
+				t.Fatalf("argfileRunScript: %v", err)
+			}
+			if !strings.Contains(body, tt.wantLine) {
+				t.Errorf("launch line = %q, want to contain %q", body, tt.wantLine)
+			}
+			args, err := os.ReadFile(filepath.Join(dir, "user_jvm_args.txt"))
+			if err != nil || !strings.Contains(string(args), "-Xms2G") || !strings.Contains(string(args), "-Xmx6G") {
+				t.Errorf("user_jvm_args.txt = %q,%v want the heap range", args, err)
+			}
+		})
+	}
+
+	t.Run("missing run.sh", func(t *testing.T) {
+		if _, err := argfileRunScript(t.TempDir(), java, 2, 6); err == nil {
+			t.Error("want error when the installer left no run.sh")
+		}
+	})
+
+	t.Run("unexpected launch line", func(t *testing.T) {
+		dir := t.TempDir()
+		os.WriteFile(filepath.Join(dir, "run.sh"), []byte("#!/bin/sh\necho nope\n"), 0o755)
+		if _, err := argfileRunScript(dir, java, 2, 6); err == nil {
+			t.Error("want error when the launch token is absent")
+		}
+	})
+}
+
 func TestDetect(t *testing.T) {
 	tests := []struct {
 		name   string

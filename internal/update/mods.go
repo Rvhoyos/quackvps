@@ -119,8 +119,12 @@ func reportModPlan(resolved map[string]modrinth.Version, unknown []string) {
 	}
 }
 
-func reportDone(resolved map[string]modrinth.Version, unknown []string) {
+func reportDone(resolved map[string]modrinth.Version, unknown []string, keptMods bool) {
 	ui.Step("Update complete")
+	if !keptMods {
+		ui.Success("Server updated with an empty mods/ folder — no mods carried over.")
+		return
+	}
 	ui.Success("%d mod(s) upgraded.", len(resolved))
 	if len(unknown) > 0 {
 		ui.Warn("%d mod(s) were not carried over (not on Modrinth): %s", len(unknown), strings.Join(unknown, ", "))

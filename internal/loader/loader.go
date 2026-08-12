@@ -88,6 +88,33 @@ func inlineRunScript(javaPath, jar string, minGB, maxGB int) string {
 		javaPath, xms, xmx, jar)
 }
 
+// argfileRunScript adapts the run.sh the NeoForge/Forge installer already
+// generated so the instance launches on our pinned JDK instead of whatever `java`
+// is on PATH. The installer's own script points at the freshly-installed build's
+// unix_args.txt and reads user_jvm_args.txt, so the only edits we need are the java
+// executable and (re)writing the heap argfile with the chosen range. Editing what
+// the installer produced — rather than reconstructing it from a directory scan —
+// means an update always launches the build it just installed, even while the old
+// build's libraries linger. NeoForge's launch line is "exec java @user_jvm_args…"
+// and Forge's is "java @user_jvm_args…"; both share the "java @user_jvm_args.txt"
+// token, so replacing just that swaps the executable and leaves each script as its
+// installer shipped it.
+func argfileRunScript(dir, javaPath string, minGB, maxGB int) (string, error) {
+	if err := writeUserJVMArgs(dir, minGB, maxGB); err != nil {
+		return "", err
+	}
+	generated, err := os.ReadFile(filepath.Join(dir, "run.sh"))
+	if err != nil {
+		return "", fmt.Errorf("read generated run.sh: %w", err)
+	}
+	const launch = "java @user_jvm_args.txt"
+	body := string(generated)
+	if !strings.Contains(body, launch) {
+		return "", fmt.Errorf("generated run.sh in %s has an unexpected launch line; please report this", dir)
+	}
+	return strings.Replace(body, launch, javaPath+" @user_jvm_args.txt", 1), nil
+}
+
 // writeUserJVMArgs writes the heap range into dir/user_jvm_args.txt, one arg per
 // line — the argfile format NeoForge and Forge read via @user_jvm_args.txt. It's
 // the one owner of that file, shared by both loaders.

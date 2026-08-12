@@ -18,6 +18,7 @@ import (
 	"github.com/rvhoyos/quackvps/internal/modrinth"
 	"github.com/rvhoyos/quackvps/internal/system"
 	"github.com/rvhoyos/quackvps/internal/ui"
+	"github.com/rvhoyos/quackvps/internal/web"
 )
 
 // ConfirmFunc asks the user a yes/no question during execution. The caller wires
@@ -52,13 +53,20 @@ func Run(ctx context.Context, cfg *config.Config, client modrinth.Client, confir
 		return err
 	}
 	reportModPlan(resolved, unknown)
+	if web.BlueMapPresent(cfg.Dir) {
+		ui.Warn("BlueMap will be upgraded — its map display settings reset to fresh defaults so the new version loads cleanly. Manual BlueMap map tweaks are lost; your world and rendered map are untouched.")
+	}
 
-	ok, err := confirm(fmt.Sprintf("Replace the %d mod(s) in mods/ with builds for %s? (a backup of your world is kept until this succeeds)", len(resolved)+len(unknown), cfg.MCVersion))
+	keepMods, err := confirm(fmt.Sprintf("Upgrade the %d mod(s) in mods/ to their %s builds? Choose No to update the server to %s with an empty mods/ folder (a fresh start, no mods carried over). Your world is backed up either way.", len(resolved)+len(unknown), cfg.MCVersion, cfg.MCVersion))
 	if err != nil {
 		return err
 	}
-	if !ok {
-		return fmt.Errorf("update cancelled before changing mods; world backup left at %s", backup)
+	if !keepMods {
+		// Declining doesn't abort — the server is already stopped, so we finish the
+		// update and bring it back up, just with an empty mods/ folder.
+		ui.Info("Updating with an empty mods/ folder — no mods carried over.")
+		resolved = map[string]modrinth.Version{}
+		unknown = nil
 	}
 
 	ui.Step("Upgrading the server")
@@ -76,7 +84,7 @@ func Run(ctx context.Context, cfg *config.Config, client modrinth.Client, confir
 	if err := removeBackup(backup); err != nil {
 		ui.Warn("could not remove backup %s: %v", backup, err)
 	}
-	reportDone(resolved, unknown)
+	reportDone(resolved, unknown, keepMods)
 	return nil
 }
 
@@ -128,6 +136,13 @@ func upgrade(ctx context.Context, cfg *config.Config, resolved map[string]modrin
 
 	if err := redownloadMods(ctx, cfg.Dir, resolved); err != nil {
 		return err
+	}
+	if web.BlueMapPresent(cfg.Dir) {
+		// The upgraded BlueMap regenerates fresh map configs on the next boot; the
+		// old ones may be a schema it now rejects. See web.ResetBlueMapMaps.
+		if err := web.ResetBlueMapMaps(cfg.Dir); err != nil {
+			return err
+		}
 	}
 	return system.ChownRecursive(cfg.Dir, cfg.RunAsUser)
 }
