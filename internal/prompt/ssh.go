@@ -34,10 +34,14 @@ func askHardenSSH(ctx context.Context, cfg *config.Config) error {
 		return nil
 	}
 
-	// If there's no key yet, collect one now (validated), to be appended during
-	// execution. If a key already exists we don't need to ask.
+	// If there's no key yet, collect one and install it now — before the verify
+	// step, so the user can actually test it. Deferring the append to execution
+	// would leave the verify login falling back to a password every time.
 	if !system.AuthorizedKeysPresent(cfg.RunAsHome) {
 		if err := askPublicKey(cfg); err != nil {
+			return err
+		}
+		if err := system.AppendAuthorizedKey(cfg.RunAsUser, cfg.RunAsHome, cfg.SSHPubKey); err != nil {
 			return err
 		}
 	}
