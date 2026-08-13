@@ -104,6 +104,13 @@ func featured(loader string) []featuredPack {
 	}
 }
 
+// SupportsModpacks reports whether a loader can run modpacks at all. Only Vanilla
+// can't (a modpack needs a loader), so the wizard skips the whole modpack step for
+// it while still offering manual slug entry on every real loader.
+func SupportsModpacks(loader string) bool {
+	return len(featured(loader)) > 0
+}
+
 // Modpacks returns the curated modpack offers that have a build for the chosen
 // loader + MC version. Incompatible ones are dropped rather than shown greyed —
 // with a 15-pack list per loader, greying most of them is noise; the user only

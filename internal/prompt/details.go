@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strconv"
+	"strings"
 
 	"github.com/charmbracelet/huh"
 
@@ -102,7 +103,17 @@ func askModpackAndFeatures(ctx context.Context, cfg *config.Config, client modri
 	return askFeatures(ctx, cfg, client)
 }
 
+// manualSlug is the sentinel Select value for the "type your own slug" option. A
+// null byte can't appear in a Modrinth slug, so it never collides with a real one.
+const manualSlug = "\x00manual"
+
 func askModpack(ctx context.Context, cfg *config.Config, client modrinth.Client) error {
+	// Vanilla has no loader for a modpack to target.
+	if !catalog.SupportsModpacks(cfg.Loader) {
+		cfg.Modpack = ""
+		return nil
+	}
+
 	var offers []catalog.ModpackOffer
 	if err := ui.Spinner("Checking curated modpacks", func() error {
 		var e error
@@ -111,28 +122,72 @@ func askModpack(ctx context.Context, cfg *config.Config, client modrinth.Client)
 	}); err != nil {
 		return err
 	}
-	// Vanilla (and any loader with no curated packs) has nothing to offer.
-	if len(offers) == 0 {
-		cfg.Modpack = ""
-		return nil
-	}
 
 	options := []huh.Option[string]{huh.NewOption("None — just the loader (add mods below)", "")}
 	for _, o := range offers {
 		options = append(options, huh.NewOption(o.Title, o.Slug))
 	}
+	options = append(options, huh.NewOption("Enter a Modrinth slug manually…", manualSlug))
 
-	modpack := ""
+	choice := ""
 	field := huh.NewSelect[string]().
 		Title("Install a modpack? (a curated bundle of mods)").
-		Description("Community packs marked server-ready that have a build for your version. Type to filter; pick None to start bare.\nNote: a pack's server tag is set by its author — if one won't start, try another and report it so we can drop it.").
+		Description("Community packs marked server-ready that have a build for your version. Type to filter; pick None to start bare, or enter any Modrinth slug yourself.\nNote: a pack's server tag is set by its author — if one won't start, try another and report it so we can drop it.").
 		Options(options...).
-		Value(&modpack)
+		Value(&choice)
 	if err := field.Run(); err != nil {
 		return err
 	}
-	cfg.Modpack = modpack
+	if choice == manualSlug {
+		return askManualSlug(ctx, cfg, client)
+	}
+	cfg.Modpack = choice
 	return nil
+}
+
+// askManualSlug installs any Modrinth modpack by slug, not just the curated picks.
+// The slug is checked for a build matching the loader + MC version; a miss warns
+// and re-prompts rather than failing silently or aborting the wizard. Blank = none.
+func askManualSlug(ctx context.Context, cfg *config.Config, client modrinth.Client) error {
+	for {
+		slug := ""
+		field := huh.NewInput().
+			Title("Modrinth modpack slug").
+			Description("The name from the pack's URL, e.g. modrinth.com/modpack/cobblemon-fabric. Leave blank for none.").
+			Placeholder("cobblemon-fabric").
+			Value(&slug)
+		if err := field.Run(); err != nil {
+			return err
+		}
+		slug = slugFromInput(slug)
+		if slug == "" {
+			cfg.Modpack = ""
+			return nil
+		}
+
+		ok := false
+		if err := ui.Spinner("Checking the slug on Modrinth", func() error {
+			ok = catalog.HasBuild(ctx, client, slug, cfg.Loader, cfg.MCVersion)
+			return nil
+		}); err != nil {
+			return err
+		}
+		if ok {
+			cfg.Modpack = slug
+			return nil
+		}
+		ui.Warn("no %s modpack %q with a build for Minecraft %s — check the slug on the pack's Modrinth page, or leave blank for none", cfg.Loader, slug, cfg.MCVersion)
+	}
+}
+
+// slugFromInput extracts the bare slug, tolerating a pasted URL or path by taking
+// the last path segment (modrinth.com/modpack/<slug> → <slug>).
+func slugFromInput(s string) string {
+	s = strings.Trim(strings.TrimSpace(s), "/")
+	if i := strings.LastIndex(s, "/"); i >= 0 {
+		s = s[i+1:]
+	}
+	return s
 }
 
 // featureCandidate is an add-on the wizard can offer.
