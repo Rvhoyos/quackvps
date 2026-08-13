@@ -58,11 +58,17 @@ func runBootcheck(args []string) error {
 	dir := fs.String("dir", "", "install directory")
 	javaPath := fs.String("java", "java", "path to the java executable")
 	timeout := fs.Duration("timeout", 15*time.Minute, "how long to wait for the server to boot")
+	reasonFile := fs.String("reason-file", "", "on failure, write the one-line reason here for the CI report")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
 	if *loaderName == "" || *mc == "" || *dir == "" {
 		return fmt.Errorf("bootcheck needs --loader, --mc and --dir")
 	}
-	return packtest.Run(context.Background(), *loaderName, *mc, *modpack, *dir, *javaPath, *timeout)
+	err := packtest.Run(context.Background(), *loaderName, *mc, *modpack, *dir, *javaPath, *timeout)
+	if err != nil && *reasonFile != "" {
+		// Best-effort: the reason is a report nicety, never a reason to mask the failure.
+		_ = os.WriteFile(*reasonFile, []byte(packtest.FailureReason(*dir, err)), 0o644)
+	}
+	return err
 }

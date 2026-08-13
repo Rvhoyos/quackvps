@@ -6,7 +6,7 @@ name: modpack-boot
 
 on:
   schedule:
-    - cron: "0 4 * * *" # daily, 04:00 UTC
+    - cron: "0 9 * * *" # daily, 09:00 UTC = 04:00 EST
   workflow_dispatch:
     inputs:
       slug:
@@ -79,7 +79,7 @@ jobs:
         with:
           go-version: stable
       - run: go build -o quackvps ./cmd/quackvps
-      - uses: actions/setup-java@v4
+      - uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: ${{ matrix.pack.java }}
@@ -93,12 +93,15 @@ jobs:
             --mc "${{ matrix.pack.mc }}" \
             --dir "$RUNNER_TEMP/srv" \
             --java "$JAVA_HOME/bin/java" \
-            --timeout 15m
+            --timeout 15m \
+            --reason-file "$RUNNER_TEMP/reason.txt"
           code=$?
           if [ $code -eq 0 ]; then
-            row="| ${{ needs.select.outputs.slug }} | ${{ matrix.pack.mc }} | ✅ booted |"
+            row="| ${{ needs.select.outputs.slug }} | ${{ matrix.pack.mc }} | ✅ booted | — |"
           else
-            row="| ${{ needs.select.outputs.slug }} | ${{ matrix.pack.mc }} | ❌ failed (see job log) |"
+            reason=$(head -1 "$RUNNER_TEMP/reason.txt" 2>/dev/null)
+            [ -z "$reason" ] && reason="failed to boot"
+            row="| ${{ needs.select.outputs.slug }} | ${{ matrix.pack.mc }} | ❌ failed | $reason |"
           fi
           echo "$row" > "$RUNNER_TEMP/result.md"
           echo "$row" >> "$GITHUB_STEP_SUMMARY"
@@ -110,6 +113,15 @@ jobs:
         with:
           name: result-${{ matrix.pack.mc }}
           path: ${{ runner.temp }}/result.md
+
+      # On failure, keep the full server log so a red row can be diagnosed by
+      # downloading it, no need to re-run anything.
+      - if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: log-${{ matrix.pack.mc }}
+          path: ${{ runner.temp }}/srv/logs/latest.log
+          if-no-files-found: ignore
 
   report:
     needs: [select, boot]
@@ -125,7 +137,7 @@ jobs:
           {
             echo "## Modpack boot test — ${{ needs.select.outputs.slug }}"
             echo ""
-            echo "| pack | version | result |"
-            echo "|------|---------|--------|"
-            cat results/*.md 2>/dev/null || echo "| — | — | no results |"
+            echo "| pack | version | result | reason |"
+            echo "|------|---------|--------|--------|"
+            cat results/*.md 2>/dev/null || echo "| — | — | no results | — |"
           } >> "$GITHUB_STEP_SUMMARY"

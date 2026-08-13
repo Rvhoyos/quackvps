@@ -8,6 +8,9 @@ package packtest
 import (
 	"context"
 	"fmt"
+	"os"
+	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/rvhoyos/quackvps/internal/catalog"
@@ -69,6 +72,30 @@ func SelectMatrix(ctx context.Context, client modrinth.Client, day int) (Matrix,
 		m.Entries = append(m.Entries, Version{MC: v, Java: major})
 	}
 	return m, nil
+}
+
+// FailureReason returns a one-line explanation for a failed boot, pulled from the
+// server log the run left in dir, falling back to the run error's own first line
+// when the log has nothing recognizable. It's what the CI puts in the report's
+// reason cell so a red row is actionable without opening the job log.
+func FailureReason(dir string, runErr error) string {
+	log, _ := os.ReadFile(filepath.Join(dir, "logs", "latest.log"))
+	if reasons := minecraft.FailureReasons(string(log)); len(reasons) > 0 {
+		// One reason per line in the cell (Markdown renders <br> as a break), so
+		// several missing mods read as a list, not a run-on.
+		return strings.Join(reasons, "<br>")
+	}
+	if runErr != nil {
+		return firstLine(runErr.Error())
+	}
+	return "failed"
+}
+
+func firstLine(s string) string {
+	if i := strings.IndexByte(s, '\n'); i >= 0 {
+		s = s[:i]
+	}
+	return strings.TrimSpace(s)
 }
 
 // selectPack maps a day to a pack by indexing into the fixed list, wrapping so

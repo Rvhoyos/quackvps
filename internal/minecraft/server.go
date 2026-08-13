@@ -188,6 +188,70 @@ func logTail(path string) string {
 	return tailLines(string(data), 20)
 }
 
+// fatalCues match the human-readable lines a modded server prints when it can't
+// load — one per missing/broken mod, so a pack short several dependencies prints
+// several. We collect every match to show the full scope, not just the first.
+// (Bare "requires" is deliberately absent: it's a common word that grabs
+// unrelated info lines like "requires Java 21"; the phrasings below don't.)
+var fatalCues = []string{
+	"is not installed",
+	"mandatory dependencies",
+	"which is missing",
+	"Incompatible mod",
+	"but only the following",
+	"Failure message:",
+}
+
+// fallbackCue is the last resort when no fatal cue matched: the JVM's own root
+// cause. Only the first is taken, since a stack trace repeats it.
+const fallbackCue = "Caused by:"
+
+// FailureReasons returns every actionable line explaining why a server wouldn't
+// boot, in log order and de-duplicated, each sanitized to survive a Markdown
+// table cell. Empty when nothing is recognizable, so the caller can fall back.
+// Listing them all is what lets a report reader see a pack is missing three mods,
+// not just one.
+func FailureReasons(log string) []string {
+	lines := strings.Split(log, "\n")
+	var reasons []string
+	seen := map[string]bool{}
+	for _, line := range lines {
+		for _, cue := range fatalCues {
+			if !strings.Contains(line, cue) {
+				continue
+			}
+			if s := sanitizeCell(strings.TrimSpace(line)); s != "" && !seen[s] {
+				seen[s] = true
+				reasons = append(reasons, s)
+			}
+			break
+		}
+	}
+	if len(reasons) == 0 {
+		for _, line := range lines {
+			if strings.Contains(line, fallbackCue) {
+				return []string{sanitizeCell(strings.TrimSpace(line))}
+			}
+		}
+	}
+	const max = 6 // keep a badly-broken pack's cell from swallowing the table
+	if len(reasons) > max {
+		reasons = reasons[:max]
+	}
+	return reasons
+}
+
+// sanitizeCell makes a string safe for a single Markdown table cell: collapses
+// internal whitespace, replaces pipes, and caps the length.
+func sanitizeCell(s string) string {
+	s = strings.Join(strings.Fields(s), " ")
+	s = strings.ReplaceAll(s, "|", "/")
+	if len(s) > 160 {
+		s = s[:157] + "…"
+	}
+	return s
+}
+
 // AcceptEULA sets eula=true in eula.txt, recording agreement to Mojang's EULA.
 func AcceptEULA(dir string) error {
 	path := filepath.Join(dir, "eula.txt")
