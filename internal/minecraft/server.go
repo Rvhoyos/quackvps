@@ -132,6 +132,62 @@ func tailLines(s string, n int) string {
 	return strings.Join(lines, "\n")
 }
 
+// bootReadyMarker is the line a Minecraft server logs once it has finished
+// loading and is accepting players. Reaching it is the definition of a clean boot.
+const bootReadyMarker = "Done ("
+
+// BootUntilReady boots the server via run.sh and waits until it logs that it's
+// ready, then stops it. Reaching bootReadyMarker means the loader and every mod
+// loaded cleanly, so this is how the boot-test CI proves a pack works. Unlike
+// FirstRunGenerate, which waits for the server to exit, this waits for it to come
+// up. It returns an error carrying the log tail if the server exits first or never
+// gets there within timeout.
+func BootUntilReady(ctx context.Context, dir string, timeout time.Duration) error {
+	runCtx, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
+
+	cmd := exec.CommandContext(runCtx, "bash", "run.sh")
+	cmd.Dir = dir
+	if err := cmd.Start(); err != nil {
+		return fmt.Errorf("start server: %w", err)
+	}
+	exited := make(chan error, 1)
+	go func() { exited <- cmd.Wait() }()
+
+	logPath := filepath.Join(dir, "logs", "latest.log")
+	ticker := time.NewTicker(2 * time.Second)
+	defer ticker.Stop()
+	for {
+		if logContains(logPath, bootReadyMarker) {
+			cancel() // it booted; stop the server
+			<-exited // and reap it
+			return nil
+		}
+		select {
+		case werr := <-exited:
+			// It quit before reaching ready: a crash, an OOM kill, or the deadline.
+			return fmt.Errorf("server exited before it finished starting: %v\n%s", werr, logTail(logPath))
+		case <-ticker.C:
+		}
+	}
+}
+
+// logContains reports whether the file at path contains marker; a missing file
+// (the server hasn't written its log yet) counts as not-yet.
+func logContains(path, marker string) bool {
+	data, err := os.ReadFile(path)
+	return err == nil && strings.Contains(string(data), marker)
+}
+
+// logTail returns the last lines of a server log for a failure message.
+func logTail(path string) string {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return "(no server log found)"
+	}
+	return tailLines(string(data), 20)
+}
+
 // AcceptEULA sets eula=true in eula.txt, recording agreement to Mojang's EULA.
 func AcceptEULA(dir string) error {
 	path := filepath.Join(dir, "eula.txt")

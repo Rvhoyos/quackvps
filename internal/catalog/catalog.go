@@ -37,6 +37,27 @@ type featuredPack struct {
 	slug, title string
 }
 
+// Pack is a curated modpack tagged with the loader it belongs to, the flattened
+// form of the per-loader featured lists. The boot-test CI walks these.
+type Pack struct {
+	Slug   string
+	Loader string
+	Title  string
+}
+
+// AllFeatured returns every curated pack across loaders in a fixed order
+// (NeoForge, then Forge, then Fabric — Quilt shares Fabric's list, so it isn't
+// repeated). The order is stable so indexing into it by day is reproducible.
+func AllFeatured() []Pack {
+	var packs []Pack
+	for _, loaderName := range []string{config.LoaderNeoForge, config.LoaderForge, config.LoaderFabric} {
+		for _, p := range featured(loaderName) {
+			packs = append(packs, Pack{Slug: p.slug, Loader: loaderName, Title: p.title})
+		}
+	}
+	return packs
+}
+
 // featured returns the hand-curated modpacks for a loader, best first (by
 // Modrinth follows). The list spans MC versions; Modpacks live-checks each so a
 // version only ever shows the packs it can actually run. Vanilla has none (a

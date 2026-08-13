@@ -1,0 +1,131 @@
+name: modpack-boot
+
+# Boots one curated modpack per day (all the MC versions it builds for) to catch
+# packs that crash despite Modrinth's author-set server_side:required tag. Runs on
+# a plain runner via `quackvps bootcheck` — no systemd, ufw, or caddy.
+
+on:
+  schedule:
+    - cron: "0 4 * * *" # daily, 04:00 UTC
+  workflow_dispatch:
+    inputs:
+      slug:
+        description: "Single pack to test (leave blank to test the day's scheduled pack)"
+        required: false
+        default: ""
+      loader:
+        description: "Loader for the single pack"
+        required: false
+        default: "neoforge"
+      mc:
+        description: "MC version for the single pack"
+        required: false
+        default: ""
+      java:
+        description: "Java major for the single pack"
+        required: false
+        default: "21"
+
+jobs:
+  select:
+    runs-on: ubuntu-latest
+    outputs:
+      loader: ${{ steps.pick.outputs.loader }}
+      slug: ${{ steps.pick.outputs.slug }}
+      matrix: ${{ steps.pick.outputs.matrix }}
+      count: ${{ steps.pick.outputs.count }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: stable
+      - run: go build -o quackvps ./cmd/quackvps
+
+      - id: pick
+        run: |
+          if [ -n "${{ inputs.slug }}" ]; then
+            # A manual single-pack run: build a one-entry matrix from the inputs.
+            loader='${{ inputs.loader }}'
+            slug='${{ inputs.slug }}'
+            matrix=$(jq -cn --arg mc '${{ inputs.mc }}' --argjson java '${{ inputs.java }}' '[{mc:$mc,java:$java}]')
+          else
+            # The scheduled path: pick the day's pack and the versions it builds for.
+            out=$(./quackvps ci-pack --day "$(date +%j)")
+            loader=$(echo "$out" | jq -r .loader)
+            slug=$(echo "$out" | jq -r .slug)
+            matrix=$(echo "$out" | jq -c .matrix)
+          fi
+          {
+            echo "loader=$loader"
+            echo "slug=$slug"
+            echo "matrix=$matrix"
+            echo "count=$(echo "$matrix" | jq 'length')"
+          } >> "$GITHUB_OUTPUT"
+
+  boot:
+    needs: select
+    if: needs.select.outputs.count != '0'
+    runs-on: ubuntu-latest
+    name: boot ${{ matrix.pack.mc }}
+    strategy:
+      fail-fast: false
+      max-parallel: 20
+      matrix:
+        pack: ${{ fromJSON(needs.select.outputs.matrix) }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: jlumbroso/free-disk-space@main
+      - uses: actions/setup-go@v5
+        with:
+          go-version: stable
+      - run: go build -o quackvps ./cmd/quackvps
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: ${{ matrix.pack.java }}
+
+      - id: boot
+        run: |
+          set +e
+          ./quackvps bootcheck \
+            --loader "${{ needs.select.outputs.loader }}" \
+            --modpack "${{ needs.select.outputs.slug }}" \
+            --mc "${{ matrix.pack.mc }}" \
+            --dir "$RUNNER_TEMP/srv" \
+            --java "$JAVA_HOME/bin/java" \
+            --timeout 15m
+          code=$?
+          if [ $code -eq 0 ]; then
+            row="| ${{ needs.select.outputs.slug }} | ${{ matrix.pack.mc }} | ✅ booted |"
+          else
+            row="| ${{ needs.select.outputs.slug }} | ${{ matrix.pack.mc }} | ❌ failed (see job log) |"
+          fi
+          echo "$row" > "$RUNNER_TEMP/result.md"
+          echo "$row" >> "$GITHUB_STEP_SUMMARY"
+          exit $code
+
+      # Always keep the row, even on failure, so the report job can collate it.
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: result-${{ matrix.pack.mc }}
+          path: ${{ runner.temp }}/result.md
+
+  report:
+    needs: [select, boot]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: result-*
+          merge-multiple: true
+          path: results
+      - run: |
+          {
+            echo "## Modpack boot test — ${{ needs.select.outputs.slug }}"
+            echo ""
+            echo "| pack | version | result |"
+            echo "|------|---------|--------|"
+            cat results/*.md 2>/dev/null || echo "| — | — | no results |"
+          } >> "$GITHUB_STEP_SUMMARY"

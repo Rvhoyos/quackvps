@@ -36,6 +36,12 @@ func main() {
 }
 
 func run() error {
+	// The hidden CI subcommands (used only by the modpack boot-test workflow) run
+	// before the normal flag parse and preflight; they aren't a VPS operation.
+	if len(os.Args) > 1 && isCISubcommand(os.Args[1]) {
+		return runCISubcommand(os.Args[1], os.Args[2:])
+	}
+
 	opts, handled, err := cli.Parse(os.Args[1:], os.Stdout)
 	if err != nil {
 		return err // flag package already printed the details
