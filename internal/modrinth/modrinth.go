@@ -1,5 +1,5 @@
 // Package modrinth is the client for the Modrinth v2 API (no key required):
-// resolving mod and modpack versions, parsing .mrpack files, and — for updates —
+// resolving mod and modpack versions, parsing .mrpack files, and, for updates
 // identifying existing jars by content hash so the tool works on any server, not
 // just ones it installed itself.
 package modrinth

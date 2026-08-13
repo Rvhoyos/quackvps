@@ -5,7 +5,7 @@ import "context"
 // ResolveRequired walks a version's required dependencies (recursively) and
 // returns the newest compatible version of each, deduplicated by project. It's a
 // free function over the Client interface so it composes with any client, real
-// or fake. Optional/incompatible/embedded deps are ignored — only "required" is
+// or fake. Optional/incompatible/embedded deps are ignored, only "required" is
 // forced.
 func ResolveRequired(ctx context.Context, c Client, root Version, loaders, gameVersions []string) ([]Version, error) {
 	resolved := map[string]Version{}

@@ -17,12 +17,12 @@ import (
 )
 
 // askLoader picks the mod loader, defaulting to NeoForge (what QuackedSMP and most
-// current packs use). Paper is intentionally absent — this tool ships mods.
+// current packs use). Paper is intentionally absent; this tool ships mods.
 func askLoader(cfg *config.Config) error {
 	loader := config.LoaderNeoForge
 	field := huh.NewSelect[string]().
 		Title("Which mod loader? (the engine that runs your mods)").
-		Description("NeoForge — what QuackedSMP and most current packs use. Fabric — lightweight & fast. Forge — the older standard, best for 1.20.1-era packs. Quilt — Fabric-compatible. Vanilla — no mods.").
+		Description("NeoForge: what QuackedSMP and most current packs use. Fabric: lightweight & fast. Forge: the older standard, best for 1.20.1-era packs. Quilt: Fabric-compatible. Vanilla: no mods.").
 		Options(
 			huh.NewOption("NeoForge (suggested)", config.LoaderNeoForge),
 			huh.NewOption("Fabric", config.LoaderFabric),
@@ -41,7 +41,7 @@ func askLoader(cfg *config.Config) error {
 // askMCVersion takes the Minecraft version. It offers the versions the chosen
 // loader can actually run (so e.g. NeoForge lists only 1.21+ and Forge only
 // 1.20.x); if that can't be fetched (offline), it falls back to validated free
-// text. Used by both install and update — on update the loader is already known.
+// text. Used by both install and update; on update the loader is already known.
 func askMCVersion(ctx context.Context, cfg *config.Config) error {
 	var releases []string
 	err := ui.Spinner("Loading "+cfg.Loader+" versions", func() error {
@@ -123,7 +123,7 @@ func askModpack(ctx context.Context, cfg *config.Config, client modrinth.Client)
 		return err
 	}
 
-	options := []huh.Option[string]{huh.NewOption("None — just the loader (add mods below)", "")}
+	options := []huh.Option[string]{huh.NewOption("None: just the loader (add mods below)", "")}
 	for _, o := range offers {
 		options = append(options, huh.NewOption(o.Title, o.Slug))
 	}
@@ -132,7 +132,7 @@ func askModpack(ctx context.Context, cfg *config.Config, client modrinth.Client)
 	choice := ""
 	field := huh.NewSelect[string]().
 		Title("Install a modpack? (a curated bundle of mods)").
-		Description("Community packs marked server-ready that have a build for your version. Type to filter; pick None to start bare, or enter any Modrinth slug yourself.\nNote: a pack's server tag is set by its author — if one won't start, try another and report it so we can drop it.").
+		Description("Community packs marked server-ready that have a build for your version. Type to filter; pick None to start bare, or enter any Modrinth slug yourself.\nNote: a pack's server tag is set by its author. If one won't start, try another and report it so we can drop it.").
 		Options(options...).
 		Value(&choice)
 	if err := field.Run(); err != nil {
@@ -176,7 +176,7 @@ func askManualSlug(ctx context.Context, cfg *config.Config, client modrinth.Clie
 			cfg.Modpack = slug
 			return nil
 		}
-		ui.Warn("no %s modpack %q with a build for Minecraft %s — check the slug on the pack's Modrinth page, or leave blank for none", cfg.Loader, slug, cfg.MCVersion)
+		ui.Warn("no %s modpack %q with a build for Minecraft %s. Check the slug on the pack's Modrinth page, or leave blank for none", cfg.Loader, slug, cfg.MCVersion)
 	}
 }
 
@@ -201,7 +201,7 @@ var featureCandidates = []featureCandidate{
 
 // askFeatures is the one add-on screen. It offers only the add-ons that have a
 // build for the chosen loader+MC (so e.g. QuackedSMP, which needs 1.21.8+, isn't
-// even shown on 1.21) — the user can't pick something that would fail. Each
+// even shown on 1.21); the user can't pick something that would fail. Each
 // checkbox sets a flag that schedules its later port/Caddy/firewall work.
 func askFeatures(ctx context.Context, cfg *config.Config, client modrinth.Client) error {
 	var options []huh.Option[string]
@@ -222,7 +222,7 @@ func askFeatures(ctx context.Context, cfg *config.Config, client modrinth.Client
 
 	var selected []string
 	field := huh.NewMultiSelect[string]().
-		Title("Add-ons — space to toggle, enter to confirm").
+		Title("Add-ons: space to toggle, enter to confirm").
 		Description("Only add-ons with a build for your version are shown. Each sets up its own port/proxy/firewall later.").
 		Options(options...).
 		Value(&selected)
@@ -274,7 +274,7 @@ func askQuackedSMPSubPrompts(cfg *config.Config) error {
 	return nil
 }
 
-// askRAM takes the JVM heap as two values — the starting heap (-Xms) and the
+// askRAM takes the JVM heap as two values: the starting heap (-Xms) and the
 // maximum heap (-Xmx), which together form a range. Defaults are recommended by
 // whether the server is modded, and clamped so the suggestion always fits the box.
 func askRAM(cfg *config.Config) error {
@@ -283,15 +283,15 @@ func askRAM(cfg *config.Config) error {
 	minDef, maxDef := heapDefaults(modded, total)
 
 	minGB, err := askHeap(
-		"Starting heap — RAM reserved at launch (-Xms), in GB",
-		"How much RAM the server grabs at startup and always holds. Keep it below the maximum so an idle server doesn't tie up memory — handy when you run several on one box.",
+		"Starting heap: RAM reserved at launch (-Xms), in GB",
+		"How much RAM the server grabs at startup and always holds. Keep it below the maximum so an idle server doesn't tie up memory, handy when you run several on one box.",
 		minDef, heapValidator(1, total))
 	if err != nil {
 		return err
 	}
 
 	maxGB, err := askHeap(
-		"Maximum heap — the ceiling it can grow to (-Xmx), in GB",
+		"Maximum heap: the ceiling it can grow to (-Xmx), in GB",
 		"The most RAM this server may use. Add ~1GB per 5 players; heavy modpacks want 8-12GB. For a big pack or high player counts, set this equal to the starting heap.",
 		maxDef, heapValidator(minGB, total))
 	if err != nil {
@@ -353,7 +353,7 @@ func heapValidator(floor, total int) func(string) error {
 			return fmt.Errorf("enter a whole number of at least %d (the starting heap)", floor)
 		}
 		if total > 0 && n > total-1 {
-			return fmt.Errorf("this box has only ~%dGB — leave at least 1GB for the OS (max %dGB)", total, total-1)
+			return fmt.Errorf("this box has only ~%dGB, leave at least 1GB for the OS (max %dGB)", total, total-1)
 		}
 		return nil
 	}

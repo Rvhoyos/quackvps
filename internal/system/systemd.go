@@ -21,7 +21,7 @@ func WriteUnit(name, contents string) error {
 	return nil
 }
 
-// UnitExists reports whether systemd knows a unit — used by the "is this folder
+// UnitExists reports whether systemd knows a unit, used by the "is this folder
 // already a server" test. It checks our unit dir first, then asks systemd so
 // units defined elsewhere still count.
 func UnitExists(name string) bool {
@@ -34,7 +34,7 @@ func UnitExists(name string) bool {
 // InstanceExists reports whether <parent>/<name> already holds a Minecraft server:
 // the directory is present AND either its systemd unit exists or it contains a
 // launch jar / run.sh. It's the guard that keeps a fresh install from clobbering an
-// existing — or half-built — server.
+// existing, or half-built, server.
 func InstanceExists(parent, name string) bool {
 	dir := filepath.Join(parent, name)
 	info, err := os.Stat(dir)
@@ -69,8 +69,8 @@ func Start(ctx context.Context, unit string) error { return Run(ctx, "systemctl"
 func Stop(ctx context.Context, unit string) error  { return Run(ctx, "systemctl", "stop", unit) }
 
 // DefaultStopWait bounds a graceful shutdown. It's a little longer than the unit's
-// TimeoutStopSec (120s) so systemd's own graceful stop — letting the world finish
-// saving — has time to complete before we give up.
+// TimeoutStopSec (120s) so systemd's own graceful stop, letting the world finish
+// saving, has time to complete before we give up.
 const DefaultStopWait = 130 * time.Second
 
 // StopAndWait stops a unit and blocks until it's truly down, so callers never touch
@@ -81,7 +81,7 @@ func StopAndWait(ctx context.Context, unit, user, session string, timeout time.D
 		return err
 	}
 	if err := WaitInactive(ctx, unit, timeout); err != nil {
-		return fmt.Errorf("%w; not touching files — try again once it's stopped", err)
+		return fmt.Errorf("%w; not touching files, try again once it's stopped", err)
 	}
 	if ScreenExists(ctx, user, session) {
 		return fmt.Errorf("screen session %q still present after stop; aborting to protect the world", session)
@@ -112,7 +112,7 @@ func UnitOOMKilled(ctx context.Context, unit string) bool {
 }
 
 // RemoveUnit stops and disables a unit, deletes its file, and reloads systemd.
-// It's best-effort — used to roll back a failed install — so each step's error is
+// It's best-effort, used to roll back a failed install, so each step's error is
 // ignored; the goal is simply to leave nothing behind.
 func RemoveUnit(ctx context.Context, unit string) {
 	_ = Run(ctx, "systemctl", "disable", "--now", unit)

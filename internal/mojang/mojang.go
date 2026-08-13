@@ -37,7 +37,7 @@ type versionMeta struct {
 }
 
 // ReleaseVersions returns released Minecraft versions at or above min, newest
-// first — the list the wizard offers so users pick rather than type a version.
+// first, the list the wizard offers so users pick rather than type a version.
 func ReleaseVersions(ctx context.Context, min string) ([]string, error) {
 	m, err := fetchManifest(ctx)
 	if err != nil {

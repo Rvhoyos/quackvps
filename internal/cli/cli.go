@@ -1,5 +1,5 @@
 // Package cli is the non-interactive front end. It parses the command line into an
-// Options, and — when --mode is given — fills a config.Config from flags and runs
+// Options, and, when --mode is given, fills a config.Config from flags and runs
 // every input check before any side effect, so a scripted run fails fast with a
 // clear message instead of falling back to a prompt. It's the flag-mode counterpart
 // to the interactive wizard in package prompt: both do nothing but produce a Config
@@ -70,7 +70,7 @@ func Parse(args []string, out io.Writer) (opts Options, handled bool, err error)
 	fs := flag.NewFlagSet("quackvps", flag.ContinueOnError)
 	fs.SetOutput(out)
 	fs.Usage = func() {
-		fmt.Fprintf(out, "quackvps — set up a Minecraft server and its web layer on a VPS.\n\n")
+		fmt.Fprintf(out, "quackvps, set up a Minecraft server and its web layer on a VPS.\n\n")
 		fmt.Fprintf(out, "Run with no flags for the interactive wizard, or pass --mode for a\nprompt-free run (for scripts/CI).\n\n")
 		fmt.Fprintf(out, "Usage:\n  sudo ./quackvps [flags]\n\nFlags:\n")
 		fs.PrintDefaults()

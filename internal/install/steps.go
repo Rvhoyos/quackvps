@@ -66,7 +66,7 @@ func preflight(ctx context.Context, cfg *config.Config, client modrinth.Client) 
 	}
 
 	if len(missing) > 0 {
-		return fmt.Errorf("cannot install — the following aren't available for %s %s:\n  - %s",
+		return fmt.Errorf("cannot install, the following aren't available for %s %s:\n  - %s",
 			cfg.Loader, cfg.MCVersion, strings.Join(missing, "\n  - "))
 	}
 	return nil
@@ -80,7 +80,7 @@ const warmUpTimeout = 4 * time.Minute
 // warmUpBoot starts the server once so the mods generate their own config files,
 // waits until the files we need to edit exist, then stops it. It's skipped when
 // there are no mod configs to edit. If the files never appear (a mod crash-loops
-// or the pack won't boot), it stops the unit and reports with the log tail —
+// or the pack won't boot), it stops the unit and reports with the log tail
 // failing loudly here instead of a false "running" at the end.
 func warmUpBoot(ctx context.Context, cfg *config.Config) error {
 	wanted := expectedConfigFiles(cfg)
@@ -94,14 +94,14 @@ func warmUpBoot(ctx context.Context, cfg *config.Config) error {
 			return err
 		}
 		waitErr := system.WaitForFiles(ctx, wanted, warmUpTimeout)
-		// Check the unit's Result before stopping it — stopping resets it, and an
+		// Check the unit's Result before stopping it, stopping resets it, and an
 		// out-of-memory kill leaves no log to tail otherwise.
 		oom := waitErr != nil && system.UnitOOMKilled(ctx, unit)
 		// Always stop the warm-up server before returning, success or not.
 		_ = system.Stop(ctx, unit)
 		_ = system.WaitInactive(ctx, unit, 130*time.Second)
 		if oom {
-			return fmt.Errorf("the server ran out of memory generating mod configs (%dG max heap on a ~%dGB box) — lower the maximum heap or add swap", cfg.HeapMaxGB, system.TotalMemoryGB())
+			return fmt.Errorf("the server ran out of memory generating mod configs (%dG max heap on a ~%dGB box), lower the maximum heap or add swap", cfg.HeapMaxGB, system.TotalMemoryGB())
 		}
 		if waitErr != nil {
 			return fmt.Errorf("server didn't finish starting:\n%s\n%w", serverLogTail(cfg.Dir), waitErr)
@@ -111,7 +111,7 @@ func warmUpBoot(ctx context.Context, cfg *config.Config) error {
 }
 
 // expectedConfigFiles is the set of mod config files writeWebConfigs will edit,
-// derived from the chosen features — the exact files the warm-up must wait for.
+// derived from the chosen features, the exact files the warm-up must wait for.
 func expectedConfigFiles(cfg *config.Config) []string {
 	var files []string
 	if containsSlug(cfg.Mods, catalog.SlugQuackedSMP) {
@@ -246,7 +246,7 @@ func installedProjects(ctx context.Context, client modrinth.Client, dir string) 
 }
 
 // configureServer writes run.sh, boots once to generate configs, accepts the
-// EULA, and sets the game port — the loader-agnostic first-run-then-configure
+// EULA, and sets the game port, the loader-agnostic first-run-then-configure
 // path.
 func configureServer(ctx context.Context, cfg *config.Config, l loader.Loader) error {
 	body, err := l.RunScript(cfg.Dir, cfg.HeapMinGB, cfg.HeapMaxGB)
@@ -269,7 +269,7 @@ func configureServer(ctx context.Context, cfg *config.Config, l loader.Loader) e
 
 // explainFirstRunFailure turns a failed first-run boot into an actionable message
 // and returns ErrHandled so it's printed exactly once. A crash with a modpack
-// selected is the one case worth reporting upstream — the pack won't start — so we
+// selected is the one case worth reporting upstream, the pack won't start, so we
 // name it and ask for a report; an out-of-memory kill is the box's fault, not the
 // pack's, so it never asks for one.
 func explainFirstRunFailure(cfg *config.Config, err error) error {
@@ -281,11 +281,11 @@ func explainFirstRunFailure(cfg *config.Config, err error) error {
 	case minecraft.FirstRunOOM:
 		ui.Warn("The server ran out of memory on first launch (%dG max heap on a ~%dGB box). Lower this server's maximum heap, or add swap to the box.", cfg.HeapMaxGB, system.TotalMemoryGB())
 	case minecraft.FirstRunTimeout:
-		ui.Warn("The server didn't finish its first run in time — it may be hung.")
+		ui.Warn("The server didn't finish its first run in time, it may be hung.")
 		ui.Info("%s", fre.Tail)
 	default:
 		if cfg.Modpack != "" {
-			ui.Warn("The modpack %q failed to start on %s %s — please report it so we can drop it from the list.", cfg.Modpack, cfg.Loader, cfg.MCVersion)
+			ui.Warn("The modpack %q failed to start on %s %s, please report it so we can drop it from the list.", cfg.Modpack, cfg.Loader, cfg.MCVersion)
 		} else {
 			ui.Warn("The server crashed on first launch.")
 		}
@@ -294,11 +294,21 @@ func explainFirstRunFailure(cfg *config.Config, err error) error {
 	return ErrHandled
 }
 
-// writeWebConfigs writes each add-on's port into its own config, plus the two
-// cross-config QuackedSMP fields (panel_url, voicechat_enable).
+// writeWebConfigs writes each add-on's port into its own config, points Simple
+// Voice Chat at the box's public IP, and sets the two cross-config QuackedSMP
+// fields (panel_url, voicechat_enable).
 func writeWebConfigs(cfg *config.Config) error {
 	for _, c := range web.Components(cfg.Features) {
 		if err := c.WritePort(cfg.Dir, cfg.Ports[c.Key()]); err != nil {
+			return err
+		}
+	}
+
+	// Pin voice_host to the public IP so clients get a reachable address instead
+	// of the mod's auto-detected one (which is wrong on many VPSes). Skipped if we
+	// can't determine the IP, leaving the mod's default.
+	if cfg.VoiceChat && cfg.PublicIP != "" {
+		if err := web.SetVoiceHost(cfg.Dir, cfg.PublicIP); err != nil {
 			return err
 		}
 	}
@@ -342,7 +352,7 @@ func configureCaddy(ctx context.Context, cfg *config.Config) error {
 		}
 		sub := cfg.Subdomains[c.Key()]
 		blocks = append(blocks, c.CaddyBlock(sub, cfg.Domain, cfg.Ports[c.Key()]))
-		checkDNS(ctx, fmt.Sprintf("%s.%s", sub, cfg.Domain))
+		checkDNS(cfg.PublicIP, fmt.Sprintf("%s.%s", sub, cfg.Domain))
 	}
 
 	if err := caddy.WriteInstanceFile(cfg.Instance, blocks); err != nil {
@@ -355,18 +365,17 @@ func configureCaddy(ctx context.Context, cfg *config.Config) error {
 	return caddy.ReloadInstance(ctx, cfg.Instance, "")
 }
 
-func checkDNS(ctx context.Context, host string) {
-	ip := system.PublicIP(ctx)
+func checkDNS(ip, host string) {
 	if ip == "" {
 		return // can't determine our IP; skip the check
 	}
 	if !caddy.DNSResolvesTo(host, ip) {
-		ui.Warn("%s doesn't resolve to this server (%s) yet — point its DNS here; Caddy will keep retrying the certificate.", host, ip)
+		ui.Warn("%s doesn't resolve to this server (%s) yet. Point its DNS here; Caddy will keep retrying the certificate.", host, ip)
 	}
 }
 
 // configureFirewall opens SSH first (so enabling never drops us), then the game
-// port, then the flagged network ports.
+// port, then 80/443 when a domain is used, then the flagged network ports.
 func configureFirewall(ctx context.Context, cfg *config.Config) error {
 	if err := system.Firewall.EnsureInstalled(ctx); err != nil {
 		return err
@@ -376,6 +385,18 @@ func configureFirewall(ctx context.Context, cfg *config.Config) error {
 	}
 	if err := system.Firewall.Allow(ctx, cfg.ServerPort, "tcp"); err != nil {
 		return err
+	}
+	// With a domain, Caddy serves the web add-ons publicly and needs 80/443 open:
+	// 443 for HTTPS, 80 for the HTTP->HTTPS redirect and the ACME http-01 challenge.
+	// Without a domain the add-ons stay on localhost (reached via ssh -L), so these
+	// stay closed.
+	if cfg.Domain != "" {
+		if err := system.Firewall.Allow(ctx, 80, "tcp"); err != nil {
+			return err
+		}
+		if err := system.Firewall.Allow(ctx, 443, "tcp"); err != nil {
+			return err
+		}
 	}
 	for _, c := range web.Components(cfg.Features) {
 		if c.IsWeb() {

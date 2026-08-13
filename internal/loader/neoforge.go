@@ -94,7 +94,7 @@ func neoforgePrefix(mcVersion string) (string, error) {
 // version, the inverse of neoforgePrefix. Legacy builds carry the MC minor+patch
 // after an implied "1." with a trailing build number ("21.8.54" → "1.21.8");
 // calendar builds carry the full MC version ("26.1.2.30-beta" → "26.1.2"). A
-// trailing ".0" is dropped because Minecraft omits it — build "21.0.167" is MC
+// trailing ".0" is dropped because Minecraft omits it, build "21.0.167" is MC
 // "1.21", not "1.21.0" (which Modrinth/Mojang don't recognise). Returns "" if
 // unparseable.
 func neoforgeBuildToMC(build string) string {

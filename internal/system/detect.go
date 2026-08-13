@@ -34,7 +34,7 @@ func CheckOS() error {
 }
 
 // RequireCapabilities checks for the tools we can't install ourselves. ufw is
-// intentionally not required here — it's apt-installable, so ufw.EnsureInstalled
+// intentionally not required here, it's apt-installable, so ufw.EnsureInstalled
 // handles a box that lacks it.
 func RequireCapabilities() error {
 	for _, cmd := range []string{"apt-get", "systemctl"} {
@@ -54,7 +54,7 @@ func EnsureRoot() error {
 	return nil
 }
 
-// LoginUser resolves the human who invoked us — the account the server will run
+// LoginUser resolves the human who invoked us, the account the server will run
 // as, never root. Under sudo that's $SUDO_USER; otherwise the current user.
 func LoginUser() (name, home string, err error) {
 	name = os.Getenv("SUDO_USER")

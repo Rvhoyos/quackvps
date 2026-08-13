@@ -21,7 +21,7 @@ import (
 // (filesystem state, and for update/restore reading the loader/backup off disk).
 // It's the flag-mode counterpart to prompt.Run: on return cfg is ready for the
 // offline config.Validate, then the online VerifyBuildable. Any problem is a clear
-// error and a non-zero exit — a scripted run never falls back to a prompt.
+// error and a non-zero exit, a scripted run never falls back to a prompt.
 func Configure(cfg *config.Config, opts Options) error {
 	switch opts.Mode {
 	case "install":
@@ -50,7 +50,7 @@ func Configure(cfg *config.Config, opts Options) error {
 
 func configureInstall(cfg *config.Config, opts Options) error {
 	if system.InstanceExists(cfg.Parent, cfg.Instance) {
-		return fmt.Errorf("%s already holds a server — use --mode update or --mode restore, or pick another --instance", cfg.Dir)
+		return fmt.Errorf("%s already holds a server, use --mode update or --mode restore, or pick another --instance", cfg.Dir)
 	}
 
 	cfg.Loader = opts.Loader
@@ -137,7 +137,7 @@ func configureUpdate(cfg *config.Config, opts Options) error {
 	if err := requireManagedServer(cfg); err != nil {
 		return err
 	}
-	// The loader is fixed by what's on disk, never a flag — mods are loader-specific
+	// The loader is fixed by what's on disk, never a flag, mods are loader-specific
 	// and the update's hash lookup only returns same-loader builds.
 	detected, err := loader.Detect(cfg.Dir)
 	if err != nil {
@@ -201,7 +201,7 @@ func backupNames(backups []restore.Backup) string {
 
 // VerifyBuildable confirms, over the network, that the requested version (and for
 // an install, the modpack and add-ons) actually have a build for the chosen loader
-// — the guarantee the wizard gets by only offering real choices. It runs after the
+// , the guarantee the wizard gets by only offering real choices. It runs after the
 // offline config.Validate. A fetch failure is a warning, not a hard stop, so a
 // transient network problem doesn't block an otherwise valid run.
 func VerifyBuildable(ctx context.Context, cfg *config.Config, client modrinth.Client) error {
@@ -212,9 +212,9 @@ func VerifyBuildable(ctx context.Context, cfg *config.Config, client modrinth.Cl
 	releases, err := loader.SupportedVersions(ctx, cfg.Loader)
 	switch {
 	case err != nil:
-		ui.Warn("couldn't fetch %s versions to verify %s (%v) — continuing", cfg.Loader, cfg.MCVersion, err)
+		ui.Warn("couldn't fetch %s versions to verify %s (%v), continuing", cfg.Loader, cfg.MCVersion, err)
 	case !contains(releases, cfg.MCVersion):
-		return fmt.Errorf("%s has no build for Minecraft %s — run without --mode to browse the list", cfg.Loader, cfg.MCVersion)
+		return fmt.Errorf("%s has no build for Minecraft %s, run without --mode to browse the list", cfg.Loader, cfg.MCVersion)
 	}
 
 	if cfg.Mode == config.ModeUpdate {

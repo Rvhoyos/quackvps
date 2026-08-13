@@ -24,7 +24,7 @@ type FirstRunKind int
 
 const (
 	FirstRunCrash   FirstRunKind = iota // the server exited on its own, failing to load
-	FirstRunOOM                         // the kernel killed it — out of memory
+	FirstRunOOM                         // the kernel killed it, out of memory
 	FirstRunTimeout                     // it never finished within firstRunTimeout
 )
 
@@ -66,7 +66,7 @@ func FirstRunGenerate(ctx context.Context, dir string) error {
 	cmd := exec.CommandContext(runCtx, "bash", "run.sh")
 	cmd.Dir = dir
 	// A non-zero exit (EULA not accepted) is the expected outcome, so we verify by
-	// the generated file, not the exit code — but we keep the output so a genuine
+	// the generated file, not the exit code, but we keep the output so a genuine
 	// failure (e.g. the JVM running out of memory) isn't invisible.
 	out, _ := cmd.CombinedOutput()
 
@@ -78,7 +78,7 @@ func FirstRunGenerate(ctx context.Context, dir string) error {
 
 // classifyFirstRun works out why the boot produced no eula.txt. A context deadline
 // means it never finished; a SIGKILL with the context still live means the kernel
-// killed it (out of memory — an OOM-kill leaves no JVM crash dump); anything else is
+// killed it (out of memory, an OOM-kill leaves no JVM crash dump); anything else is
 // the server exiting on its own because it failed to load.
 func classifyFirstRun(runCtx context.Context, cmd *exec.Cmd) FirstRunKind {
 	if runCtx.Err() == context.DeadlineExceeded {
@@ -102,12 +102,12 @@ func firstRunDiagnostics(dir string, out []byte) string {
 		msg = cause + "\n…\n" + msg
 	}
 	if crash, _ := filepath.Glob(filepath.Join(dir, "hs_err_pid*.log")); len(crash) > 0 {
-		msg += fmt.Sprintf("\n(JVM crash dump: %s — often means too much RAM was requested for this box)", crash[0])
+		msg += fmt.Sprintf("\n(JVM crash dump: %s, often means too much RAM was requested for this box)", crash[0])
 	}
 	return msg
 }
 
-// rootCause returns the first "Caused by:" line in the server output — the line
+// rootCause returns the first "Caused by:" line in the server output, the line
 // that usually names why a modpack refused to load. Empty when there's none.
 func rootCause(s string) string {
 	for _, line := range strings.Split(s, "\n") {

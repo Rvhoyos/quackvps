@@ -16,7 +16,7 @@ import (
 //   - no-domain path: one combined `ssh -L` command forwarding every web port,
 //     then the localhost URLs to open after running it.
 //
-// Only web components appear — voice/votifier are plain firewall ports with
+// Only web components appear, voice/votifier are plain firewall ports with
 // nothing to browse to.
 func AccessSummary(cfg *config.Config, sshUserHost string) string {
 	web := webComponents(cfg)

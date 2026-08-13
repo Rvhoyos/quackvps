@@ -1,6 +1,6 @@
 // Package java picks and provisions the JDK a given Minecraft version needs.
 // The required major comes from Mojang's own per-version metadata (with a small
-// static fallback), and missing majors are installed side-by-side via Temurin —
+// static fallback), and missing majors are installed side-by-side via Temurin
 // the system default JDK is never downgraded or replaced, because different
 // instances may need different majors and mod loaders are picky about theirs.
 package java

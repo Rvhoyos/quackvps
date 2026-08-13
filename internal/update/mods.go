@@ -58,7 +58,7 @@ func identifyMods(ctx context.Context, cfg *config.Config, client modrinth.Clien
 }
 
 // listJars returns the .jar files directly inside a mods directory. A missing
-// directory is not an error — it just means nothing to carry over.
+// directory is not an error, it just means nothing to carry over.
 func listJars(modsDir string) ([]string, error) {
 	entries, err := os.ReadDir(modsDir)
 	if err != nil {
@@ -114,7 +114,7 @@ func redownloadMods(ctx context.Context, dir string, resolved map[string]modrint
 func reportModPlan(resolved map[string]modrinth.Version, unknown []string) {
 	ui.Info("%d mod(s) will be upgraded; %d could not be identified.", len(resolved), len(unknown))
 	if len(unknown) > 0 {
-		ui.Warn("Not on Modrinth — migrate these by hand if you still need them:")
+		ui.Warn("Not on Modrinth, migrate these by hand if you still need them:")
 		ui.Bullet(unknown...)
 	}
 }
@@ -122,7 +122,7 @@ func reportModPlan(resolved map[string]modrinth.Version, unknown []string) {
 func reportDone(resolved map[string]modrinth.Version, unknown []string, keptMods bool) {
 	ui.Step("Update complete")
 	if !keptMods {
-		ui.Success("Server updated with an empty mods/ folder — no mods carried over.")
+		ui.Success("Server updated with an empty mods/ folder, no mods carried over.")
 		return
 	}
 	ui.Success("%d mod(s) upgraded.", len(resolved))

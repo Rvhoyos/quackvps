@@ -10,7 +10,7 @@ import (
 )
 
 // fabric installs Fabric's ready-to-run server launcher directly from the Fabric
-// meta service — no separate installer step. The launcher downloads the rest on
+// meta service, no separate installer step. The launcher downloads the rest on
 // first boot, which the install flow triggers headlessly.
 type fabric struct{ javaPath string }
 

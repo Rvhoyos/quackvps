@@ -9,7 +9,7 @@ import (
 	"github.com/rvhoyos/quackvps/internal/dl"
 )
 
-// forge runs Forge's installer, which — like NeoForge, from which it forked —
+// forge runs Forge's installer, which, like NeoForge, from which it forked
 // lays down a libraries/ tree and argfiles. Forge is offered for the 1.20.1 era,
 // whose big modpack library is Forge-based. 1.17+ Forge uses the argfile launcher
 // (our floor is 1.20.1), so the launch shape matches NeoForge exactly.

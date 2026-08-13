@@ -1,5 +1,5 @@
 // Package config holds the single Config struct that captures every answer for
-// one run, plus Validate — the one gate that must pass before any side effect.
+// one run, plus Validate, the one gate that must pass before any side effect.
 //
 // The wizard (internal/prompt) and, later, the flag parser both do nothing but
 // fill a Config; execution packages consume it. Keeping that boundary strict is
@@ -38,7 +38,7 @@ func (m Mode) String() string {
 	}
 }
 
-// Loader names — the canonical values of Config.Loader. Paper is deliberately
+// Loader names, the canonical values of Config.Loader. Paper is deliberately
 // absent: this tool ships mods, not Bukkit plugins. Forge is included for the
 // 1.20.1 era, whose large modpack library is Forge-based (NeoForge's earliest
 // version is 1.20.2).
@@ -50,7 +50,7 @@ const (
 	LoaderVanilla  = "vanilla"
 )
 
-// Port keys — the map keys for Config.Ports and Config.Subdomains. ServerPort is
+// Port keys, the map keys for Config.Ports and Config.Subdomains. ServerPort is
 // a field of its own; Ports holds only the flagged add-ons.
 const (
 	PortVoiceChat = "voicechat"
@@ -59,15 +59,15 @@ const (
 	PortBlueMap   = "bluemap"
 )
 
-// MinMCVersion is the oldest release we support. It's NeoForge's own floor —
-// NeoForge didn't exist before 1.20.1 — and covers the popular modded era
+// MinMCVersion is the oldest release we support. It's NeoForge's own floor
+// NeoForge didn't exist before 1.20.1, and covers the popular modded era
 // (1.20.1/1.19.2/1.18.2). Below it, versions need Java 16/8, which we don't wire
 // up. We install Java 17 for 1.18–1.20.4 and Java 21/25 for newer.
 const MinMCVersion = "1.20.1"
 
 // ForgeNeoSplit is the Minecraft version where the modding community forked: 1.20.x
-// and older is the Forge era, 1.21+ is NeoForge. The two never overlap — each
-// loader's mods and modpacks live on one side of the line — so a server must not
+// and older is the Forge era, 1.21+ is NeoForge. The two never overlap, each
+// loader's mods and modpacks live on one side of the line, so a server must not
 // pair a loader with a version on the wrong side. The loader package filters its
 // version lists by this same boundary.
 const ForgeNeoSplit = "1.21"
@@ -120,6 +120,11 @@ type Config struct {
 
 	RunAsUser string // the invoking login user (e.g. ubuntu); never root
 	RunAsHome string // that user's home dir
+
+	// PublicIP is the box's public IPv4, resolved once at install time and reused
+	// by DNS checks, the voice_host config, and the summary. Not a user answer and
+	// not validated; "" means it couldn't be determined and callers degrade.
+	PublicIP string
 }
 
 // New returns a Config with the safe defaults that don't depend on any answer.
@@ -149,7 +154,7 @@ var validLoaders = map[string]bool{
 // The checks split by mode. Every flow needs a valid target (parent, instance,
 // dir) and a non-root run-as user. Install and update also need a loader and MC
 // version; restore doesn't touch either (it only swaps the world). Only install
-// configures RAM, ports, features, and the web layer from the wizard — on update
+// configures RAM, ports, features, and the web layer from the wizard, on update
 // those are read from the existing server on disk, so they aren't validated here.
 func (c *Config) Validate() error {
 	if c.Mode != ModeInstall && c.Mode != ModeUpdate && c.Mode != ModeRestore {
@@ -247,7 +252,7 @@ func (c *Config) validateInstall() error {
 
 // ValidateEmail accepts a blank address (the ACME contact is optional) or a
 // single plain address like you@example.com. It rejects display-name forms
-// ("You <a@b>") and domains with no dot — the usual typos — so a malformed
+// ("You <a@b>") and domains with no dot, the usual typos, so a malformed
 // contact never reaches the Caddyfile's global block.
 func ValidateEmail(s string) error {
 	s = strings.TrimSpace(s)

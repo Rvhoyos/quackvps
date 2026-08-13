@@ -52,7 +52,7 @@ func PostJSON(ctx context.Context, url string, body, out any) error {
 	return doJSON(req, out)
 }
 
-// GetBytes fetches url and returns the raw body — for the non-JSON endpoints we
+// GetBytes fetches url and returns the raw body, for the non-JSON endpoints we
 // hit, like Quilt's XML maven metadata.
 func GetBytes(ctx context.Context, url string) ([]byte, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)

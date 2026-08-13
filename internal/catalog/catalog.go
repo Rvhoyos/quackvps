@@ -1,5 +1,5 @@
 // Package catalog assembles the mod and modpack choices the wizard offers. The
-// modpack list is a small, hand-curated set per loader — not a live Modrinth
+// modpack list is a small, hand-curated set per loader, not a live Modrinth
 // search, which is dominated by low-quality "optimization" packs that game the
 // metadata. Each curated pack is checked live for a build matching the chosen
 // loader + MC version; ones without a match are dropped so only installable
@@ -112,7 +112,7 @@ func SupportsModpacks(loader string) bool {
 }
 
 // Modpacks returns the curated modpack offers that have a build for the chosen
-// loader + MC version. Incompatible ones are dropped rather than shown greyed —
+// loader + MC version. Incompatible ones are dropped rather than shown greyed
 // with a 15-pack list per loader, greying most of them is noise; the user only
 // wants the ones they can install. A slug that errors (delisted, network) is
 // skipped, never fatal, so one bad entry can't break the whole screen.

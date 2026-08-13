@@ -1,5 +1,5 @@
 // Package install executes a fresh server install from a validated Config. It is
-// pure execution — it never prompts; the wizard already gathered every answer.
+// pure execution, it never prompts; the wizard already gathered every answer.
 // The step order matters and mirrors the spec: secure first, get the server
 // running, then wire the web layer and firewall, then start and report.
 package install
@@ -35,6 +35,10 @@ func Run(ctx context.Context, cfg *config.Config, client modrinth.Client) (err e
 		return err
 	}
 
+	// Resolve the public IP once here; DNS checks, the voice_host config, and the
+	// summary all read cfg.PublicIP rather than each hitting the network again.
+	cfg.PublicIP = system.PublicIP(ctx)
+
 	if cfg.HardenSSH && cfg.SSHVerified {
 		ui.Step("Hardening SSH")
 		if err := hardenSSH(ctx, cfg); err != nil {
@@ -55,7 +59,7 @@ func Run(ctx context.Context, cfg *config.Config, client modrinth.Client) (err e
 	}
 
 	// From here on we write to disk. If any later step fails, roll the whole install
-	// back so a broken half-install never lingers — but only remove what this run
+	// back so a broken half-install never lingers, but only remove what this run
 	// created; a directory the user already had is left untouched.
 	_, statErr := os.Stat(cfg.Dir)
 	createdDir := os.IsNotExist(statErr)
@@ -98,7 +102,7 @@ func Run(ctx context.Context, cfg *config.Config, client modrinth.Client) (err e
 
 	// Mods only write their config files on a real boot, so warm the server up
 	// once to generate them, then edit them. (Skipped when there's nothing to
-	// edit.) writeWebConfigs is edit-only — it never fabricates a config.
+	// edit.) writeWebConfigs is edit-only, it never fabricates a config.
 	if err := warmUpBoot(ctx, cfg); err != nil {
 		return err
 	}
@@ -126,12 +130,12 @@ func Run(ctx context.Context, cfg *config.Config, client modrinth.Client) (err e
 		return err
 	}
 
-	printSummary(ctx, cfg)
+	printSummary(cfg)
 	return nil
 }
 
-// rollback removes what a failed install created — its systemd unit and its instance
-// directory — so the box is left clean and the name is free to reuse. It touches only
+// rollback removes what a failed install created, its systemd unit and its instance
+// directory, so the box is left clean and the name is free to reuse. It touches only
 // what this run made (guarded by the flags), never pre-existing data, and runs on a
 // fresh context so it still completes even if the install was cancelled mid-way.
 func rollback(cfg *config.Config, createdDir, wroteUnit bool) {

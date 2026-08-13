@@ -1,7 +1,7 @@
 // Package restore puts a QuackedSMP world backup back into an existing instance.
 // QuackedSMP writes <dir>/backups/world-<stamp>.zip (a plain zip whose root is
 // world/); restoring one stops the server, moves the current world aside, unzips
-// the chosen backup in its place, and starts back up — rolling the old world back
+// the chosen backup in its place, and starts back up, rolling the old world back
 // if the server won't boot. Like update, it's scoped to one instance and never
 // prompts: the wizard picks the backup, this package executes.
 package restore
@@ -63,7 +63,7 @@ func Run(ctx context.Context, cfg *config.Config) error {
 
 // moveAside renames the instance's world/ out of the way so the backup can take
 // its place while keeping the old one recoverable. It returns the new path, or ""
-// when there was no world/ to move (an unusual but harmless case — we just unzip).
+// when there was no world/ to move (an unusual but harmless case, we just unzip).
 func moveAside(world string) (string, error) {
 	if _, err := os.Stat(world); err != nil {
 		if os.IsNotExist(err) {
@@ -88,7 +88,7 @@ func restoreAside(world, aside, backup string, cause error) error {
 	if aside != "" {
 		if err := os.Rename(aside, world); err != nil {
 			ui.Error("could not move your original world back from %s: %v", aside, err)
-			ui.Warn("Your original world is still at %s — move it back to %s by hand.", aside, world)
+			ui.Warn("Your original world is still at %s, move it back to %s by hand.", aside, world)
 			return cause
 		}
 		ui.Info("Your original world has been put back; the server is unchanged.")

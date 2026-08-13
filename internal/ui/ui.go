@@ -1,5 +1,5 @@
 // Package ui is the tool's output voice: section headers, status lines, and a
-// spinner for long steps. It only writes output — it never prompts. Color
+// spinner for long steps. It only writes output; it never prompts. Color
 // degrades automatically when stdout isn't a terminal, and the spinner animates
 // only on a TTY so piped/CI output stays clean.
 package ui

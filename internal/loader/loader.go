@@ -1,7 +1,7 @@
 // Package loader installs a Minecraft server for a given mod loader and produces
 // the run.sh that launches it. One small interface, five implementations
 // (Fabric, Quilt, NeoForge, Forge, Vanilla). Each install is headless; RAM is
-// applied the way each loader expects — inline java flags for most, a
+// applied the way each loader expects, inline java flags for most, a
 // user_jvm_args.txt argfile for NeoForge and Forge.
 package loader
 
@@ -93,7 +93,7 @@ func inlineRunScript(javaPath, jar string, minGB, maxGB int) string {
 // is on PATH. The installer's own script points at the freshly-installed build's
 // unix_args.txt and reads user_jvm_args.txt, so the only edits we need are the java
 // executable and (re)writing the heap argfile with the chosen range. Editing what
-// the installer produced — rather than reconstructing it from a directory scan —
+// the installer produced, rather than reconstructing it from a directory scan
 // means an update always launches the build it just installed, even while the old
 // build's libraries linger. NeoForge's launch line is "exec java @user_jvm_args…"
 // and Forge's is "java @user_jvm_args…"; both share the "java @user_jvm_args.txt"
@@ -116,7 +116,7 @@ func argfileRunScript(dir, javaPath string, minGB, maxGB int) (string, error) {
 }
 
 // writeUserJVMArgs writes the heap range into dir/user_jvm_args.txt, one arg per
-// line — the argfile format NeoForge and Forge read via @user_jvm_args.txt. It's
+// line, the argfile format NeoForge and Forge read via @user_jvm_args.txt. It's
 // the one owner of that file, shared by both loaders.
 func writeUserJVMArgs(dir string, minGB, maxGB int) error {
 	xms, xmx := heapArgs(minGB, maxGB)

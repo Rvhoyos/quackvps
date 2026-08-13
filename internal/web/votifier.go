@@ -2,7 +2,7 @@ package web
 
 import "github.com/rvhoyos/quackvps/internal/config"
 
-// votifier is QuackedSMP's bundled Votifier v2 listener — a plain TCP port opened
+// votifier is QuackedSMP's bundled Votifier v2 listener, a plain TCP port opened
 // in the firewall, not a web service. Its config lives in quackedsmp.json under
 // "votifier".
 type votifier struct{}

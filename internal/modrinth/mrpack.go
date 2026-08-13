@@ -33,7 +33,7 @@ type MrpackFile struct {
 }
 
 // serverSupported reports whether a file should be installed on a server. A pack
-// that omits env entirely (Server == "") is treated as required — the common case.
+// that omits env entirely (Server == "") is treated as required, the common case.
 func (f MrpackFile) serverSupported() bool {
 	return f.Env.Server != "unsupported"
 }

@@ -15,12 +15,13 @@ import (
 // after). The editors try each candidate against the config the mod actually
 // generated; if none match, that's a schema change we can't safely guess through,
 // so they return a clear, reportable error rather than fabricate anything. These
-// editors never create a config from scratch — the install boots the server once
+// editors never create a config from scratch, the install boots the server once
 // so the mod writes its own configs first (see install.warmUpBoot).
 var (
 	keysBlueMapPort     = []string{"port"}
 	keysBlueMapAccept   = []string{"accept-download"}
 	keysVoicePort       = []string{"port"}
+	keysVoiceHost       = []string{"voice_host"}
 	keysDashboard       = []string{"dashboard"}
 	keysVotifier        = []string{"votifier"}
 	keysSectionPort     = []string{"port"}
@@ -35,13 +36,13 @@ func quackedsmpConfig(dir string) string {
 }
 
 // editJSON reads a JSON object the mod generated, applies mutate, and writes it
-// back indented. A missing file is an error (the mod should have created it) —
+// back indented. A missing file is an error (the mod should have created it)
 // mutate is where the candidate-key lookups live, so it can also error.
 func editJSON(path string, mutate func(m map[string]any) error) error {
 	data, err := os.ReadFile(path)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return fmt.Errorf("%s not found — the server didn't generate it; please report this", path)
+			return fmt.Errorf("%s not found, the server didn't generate it; please report this", path)
 		}
 		return fmt.Errorf("read %s: %w", path, err)
 	}
@@ -65,14 +66,14 @@ func editJSON(path string, mutate func(m map[string]any) error) error {
 }
 
 // jsonKey returns the first candidate present in m, or an error naming what we
-// looked for — so a renamed key surfaces instead of silently doing nothing.
+// looked for, so a renamed key surfaces instead of silently doing nothing.
 func jsonKey(m map[string]any, candidates []string, where string) (string, error) {
 	for _, c := range candidates {
 		if _, ok := m[c]; ok {
 			return c, nil
 		}
 	}
-	return "", fmt.Errorf("none of %v found in %s — the mod's config format may have changed; please report this", candidates, where)
+	return "", fmt.Errorf("none of %v found in %s, the mod's config format may have changed; please report this", candidates, where)
 }
 
 // jsonSection returns the nested object under the first matching candidate key.
@@ -113,7 +114,7 @@ func SetVoicechatEnable(dir string, on bool) error {
 }
 
 // setSectionPort sets `port` (and `enabled: true`) inside a named section of
-// quackedsmp.json — used for both the dashboard and votifier blocks.
+// quackedsmp.json, used for both the dashboard and votifier blocks.
 func setSectionPort(dir string, sectionKeys []string, port int) error {
 	return editJSON(quackedsmpConfig(dir), func(m map[string]any) error {
 		section, err := jsonSection(m, sectionKeys, "quackedsmp.json")
@@ -134,13 +135,13 @@ func setSectionPort(dir string, sectionKeys []string, port int) error {
 
 // setHOCONKey sets the first matching candidate key in a HOCON file to value
 // (verbatim; caller quotes if needed), preserving indentation and every other
-// line. A missing file, or a file with none of the candidate keys, is an error —
+// line. A missing file, or a file with none of the candidate keys, is an error
 // the mod generates these configs first, so either case means the schema moved.
 func setHOCONKey(path string, candidates []string, value string) error {
 	data, err := os.ReadFile(path)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return fmt.Errorf("%s not found — the server didn't generate it; please report this", path)
+			return fmt.Errorf("%s not found, the server didn't generate it; please report this", path)
 		}
 		return fmt.Errorf("read %s: %w", path, err)
 	}
@@ -154,7 +155,7 @@ func setHOCONKey(path string, candidates []string, value string) error {
 			return nil
 		}
 	}
-	return fmt.Errorf("none of %v found in %s — the mod's config format may have changed; please report this", candidates, path)
+	return fmt.Errorf("none of %v found in %s, the mod's config format may have changed; please report this", candidates, path)
 }
 
 // setPropKey sets the first matching candidate key in an existing .properties
@@ -164,7 +165,7 @@ func setHOCONKey(path string, candidates []string, value string) error {
 func setPropKey(path string, candidates []string, value string) error {
 	if _, err := os.Stat(path); err != nil {
 		if os.IsNotExist(err) {
-			return fmt.Errorf("%s not found — the server didn't generate it; please report this", path)
+			return fmt.Errorf("%s not found, the server didn't generate it; please report this", path)
 		}
 		return fmt.Errorf("stat %s: %w", path, err)
 	}
@@ -178,5 +179,5 @@ func setPropKey(path string, candidates []string, value string) error {
 			return minecraft.WriteProps(path, props)
 		}
 	}
-	return fmt.Errorf("none of %v found in %s — the mod's config format may have changed; please report this", candidates, path)
+	return fmt.Errorf("none of %v found in %s, the mod's config format may have changed; please report this", candidates, path)
 }

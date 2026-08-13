@@ -37,7 +37,7 @@ var hintStyle = lipgloss.NewStyle().Faint(true)
 
 // View shows the prompt and the accept/cancel keys on top, then the tree. The
 // tree renders its own navigation navbar underneath, so we don't repeat the
-// arrow keys here — that avoids two competing help lines.
+// arrow keys here, that avoids two competing help lines.
 func (m *model) View() string {
 	header := m.help + "\n" + hintStyle.Render("Enter = select this folder · Esc = cancel")
 	return header + "\n\n" + m.inner.View()

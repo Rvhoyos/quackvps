@@ -20,7 +20,7 @@ var (
 
 // readHeap recovers the heap range (GB) from the existing server so an update
 // keeps it rather than silently resetting to a default. NeoForge/Forge store it
-// in user_jvm_args.txt; the other loaders inline it in run.sh — we check both.
+// in user_jvm_args.txt; the other loaders inline it in run.sh, we check both.
 // A file with an -Xmx but no -Xms mirrors the max onto the min.
 func readHeap(dir string) (minGB, maxGB int) {
 	for _, name := range []string{"user_jvm_args.txt", "run.sh"} {

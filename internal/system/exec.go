@@ -1,7 +1,7 @@
 // Package system wraps the host-level operations the installer performs on a
 // Debian/Ubuntu box: capability detection, apt, systemd, screen, ufw, sshd
 // hardening, and port scanning. Every function is a thin, explicit shell over a
-// real command — it holds no policy and never prompts.
+// real command, it holds no policy and never prompts.
 package system
 
 import (

@@ -1,12 +1,10 @@
 package install
 
 import (
-	"context"
 	"fmt"
 
 	"github.com/rvhoyos/quackvps/internal/config"
 	"github.com/rvhoyos/quackvps/internal/minecraft"
-	"github.com/rvhoyos/quackvps/internal/system"
 	"github.com/rvhoyos/quackvps/internal/ui"
 	"github.com/rvhoyos/quackvps/internal/web"
 )
@@ -14,10 +12,10 @@ import (
 // printSummary reports how to reach and manage the new server: the game address,
 // the console command, and the single web-access block (HTTPS URLs, or one SSH
 // tunnel for the no-domain path).
-func printSummary(ctx context.Context, cfg *config.Config) {
+func printSummary(cfg *config.Config) {
 	ui.Step("Done")
 
-	host := system.PublicIP(ctx)
+	host := cfg.PublicIP
 	if host == "" {
 		host = "<your-server-ip>"
 	}

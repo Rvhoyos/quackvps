@@ -73,7 +73,7 @@ func validFolderName(name string) error {
 // browse runs the directory tree and returns the focused directory's path.
 func browse(ctx context.Context, start, help string) (string, error) {
 	tree, err := treeview.NewTreeFromFileSystem(ctx, start, false,
-		// Directories only, and skip hidden ones (.ssh, .cache, …) — they're never
+		// Directories only, and skip hidden ones (.ssh, .cache, …), they're never
 		// a place to install a server and only clutter the list.
 		treeview.WithFilterFunc(func(info treeview.FileInfo) bool {
 			return info.IsDir() && !strings.HasPrefix(info.Name(), ".")

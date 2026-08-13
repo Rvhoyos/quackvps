@@ -141,7 +141,7 @@ func TestNeoforgeBuildToMC(t *testing.T) {
 		{"21.8.54", "1.21.8"},
 		{"21.11.45", "1.21.11"},
 		{"20.4.237", "1.20.4"},
-		{"21.0.167", "1.21"}, // trailing .0 dropped — MC is "1.21", not "1.21.0"
+		{"21.0.167", "1.21"}, // trailing .0 dropped, MC is "1.21", not "1.21.0"
 		{"26.1.2.30-beta", "26.1.2"},
 		{"26.2.0", "26.2"}, // calendar trailing .0 dropped too
 		{"garbage", ""},

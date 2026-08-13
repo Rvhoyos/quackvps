@@ -15,7 +15,7 @@ const defaultGamePort = 25565
 // end-of-run summary, or "" when there's no domain (the SSH-tunnel path creates no
 // records). We never set DNS ourselves, so this tells the user exactly what to add:
 // an A record per web add-on subdomain, plus the Minecraft join address for this
-// instance — with an SRV record only when the game port isn't the default 25565.
+// instance, with an SRV record only when the game port isn't the default 25565.
 func DNSRecordGuidance(cfg *config.Config, publicIP string) string {
 	if cfg.Domain == "" {
 		return ""
@@ -31,7 +31,8 @@ func DNSRecordGuidance(cfg *config.Config, publicIP string) string {
 			fmt.Fprintf(&b, "    %-4s %s.%s   ->   %s\n", "A", cfg.Subdomains[c.Key()], cfg.Domain, publicIP)
 		}
 		b.WriteString("    Keep the Cloudflare proxy on. If Caddy can't get the HTTPS certificate,\n")
-		b.WriteString("    switch the record to DNS-only, reload Caddy, then turn the proxy back on.\n")
+		b.WriteString("    switch the record to DNS-only, run `sudo systemctl reload caddy`, then\n")
+		b.WriteString("    turn the proxy back on (orange cloud).\n")
 	}
 
 	join := cfg.Instance + "." + cfg.Domain

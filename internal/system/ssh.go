@@ -33,7 +33,7 @@ func EffectiveConfig(ctx context.Context) (map[string]string, error) {
 }
 
 // IsHardened reports whether password and keyboard-interactive auth are already
-// off — in which case the hardening step is a no-op.
+// off, in which case the hardening step is a no-op.
 func IsHardened(ctx context.Context) bool {
 	cfg, err := EffectiveConfig(ctx)
 	if err != nil {
@@ -70,7 +70,7 @@ func AuthorizedKeysPresent(home string) bool {
 }
 
 // ValidatePublicKey accepts only a single valid public-key line. It explicitly
-// rejects a pasted private key — the classic, dangerous mistake — with a clear
+// rejects a pasted private key, the classic, dangerous mistake, with a clear
 // message instead of a parse error.
 func ValidatePublicKey(s string) error {
 	s = strings.TrimSpace(s)
@@ -78,7 +78,7 @@ func ValidatePublicKey(s string) error {
 		return fmt.Errorf("no key provided")
 	}
 	if strings.Contains(s, "PRIVATE KEY") {
-		return fmt.Errorf("that looks like your PRIVATE key — never share it; paste the .pub line instead (it starts with ssh-ed25519 or ssh-rsa)")
+		return fmt.Errorf("that looks like your PRIVATE key, never share it; paste the .pub line instead (it starts with ssh-ed25519 or ssh-rsa)")
 	}
 	if strings.ContainsAny(s, "\r\n") {
 		return fmt.Errorf("a public key is a single line; this has line breaks")
@@ -119,7 +119,7 @@ func AppendAuthorizedKey(username, home, key string) error {
 	}
 
 	// We run as root, so the new files would be root-owned and unusable by sshd
-	// for this user — fix ownership on the dir and the key file.
+	// for this user, fix ownership on the dir and the key file.
 	if err := chownToUser(username, sshDir, akPath); err != nil {
 		return err
 	}
@@ -141,7 +141,7 @@ func WriteHardeningDropin() error {
 	return nil
 }
 
-// ValidateConfig runs `sshd -t` to check the config parses before we reload —
+// ValidateConfig runs `sshd -t` to check the config parses before we reload
 // the guard against a typo stranding the user.
 func ValidateConfig(ctx context.Context) error { return Run(ctx, "sshd", "-t") }
 

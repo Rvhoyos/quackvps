@@ -10,7 +10,7 @@ import (
 func UnitName(instance string) string { return "mc-" + instance }
 
 // UnitFile builds the systemd unit that runs an instance inside a screen session
-// — the shape verified on the reference box. Type=forking because screen -dm
+// , the shape verified on the reference box. Type=forking because screen -dm
 // backgrounds itself; the graceful ExecStop stuffs "stop" into the console so the
 // world saves before exit; TimeoutStopSec gives that save time to finish before
 // systemd would resort to SIGKILL.

@@ -1,7 +1,7 @@
 // Package minecraft writes the files that make an installed server bootable and
 // managed: eula.txt, server.properties, the uniform run.sh, and the systemd unit
-// that runs it inside a screen session. It follows the universal EULA path — boot
-// once headless to generate the files, then configure them — so it behaves the
+// that runs it inside a screen session. It follows the universal EULA path, boot
+// once headless to generate the files, then configure them, so it behaves the
 // same across every loader.
 package minecraft
 

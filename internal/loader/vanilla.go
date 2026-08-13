@@ -10,7 +10,7 @@ import (
 	"github.com/rvhoyos/quackvps/internal/mojang"
 )
 
-// vanilla installs the plain Mojang server jar — no mods, no installer.
+// vanilla installs the plain Mojang server jar, no mods, no installer.
 type vanilla struct{ javaPath string }
 
 func (vanilla) Name() string { return config.LoaderVanilla }

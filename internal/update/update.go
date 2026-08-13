@@ -1,5 +1,5 @@
 // Package update upgrades an existing server in place: stop it, back up the
-// world, upgrade the loader and mods, then start it again — scoped entirely to
+// world, upgrade the loader and mods, then start it again, scoped entirely to
 // one instance so other servers on the box are untouched. Like install, it never
 // prompts; the one unavoidable mid-run decision (wiping mods/) is delegated to a
 // ConfirmFunc the caller supplies, so execution stays independent of the prompt
@@ -48,7 +48,7 @@ func Run(ctx context.Context, cfg *config.Config, client modrinth.Client, confir
 	}
 	reportModPlan(resolved, unknown)
 	if web.BlueMapPresent(cfg.Dir) {
-		ui.Warn("BlueMap will be upgraded — its map display settings reset to fresh defaults so the new version loads cleanly. Manual BlueMap map tweaks are lost; your world and rendered map are untouched.")
+		ui.Warn("BlueMap will be upgraded, its map display settings reset to fresh defaults so the new version loads cleanly. Manual BlueMap map tweaks are lost; your world and rendered map are untouched.")
 	}
 
 	keepMods, err := confirm(fmt.Sprintf("Upgrade the %d mod(s) in mods/ to their %s builds? Choose No to update the server to %s with an empty mods/ folder (a fresh start, no mods carried over). Your world is backed up either way.", len(resolved)+len(unknown), cfg.MCVersion, cfg.MCVersion))
@@ -56,9 +56,9 @@ func Run(ctx context.Context, cfg *config.Config, client modrinth.Client, confir
 		return err
 	}
 	if !keepMods {
-		// Declining doesn't abort — the server is already stopped, so we finish the
+		// Declining doesn't abort, the server is already stopped, so we finish the
 		// update and bring it back up, just with an empty mods/ folder.
-		ui.Info("Updating with an empty mods/ folder — no mods carried over.")
+		ui.Info("Updating with an empty mods/ folder, no mods carried over.")
 		resolved = map[string]modrinth.Version{}
 		unknown = nil
 	}

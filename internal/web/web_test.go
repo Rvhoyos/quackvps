@@ -130,6 +130,35 @@ func TestSetHOCONKeyEditsAndErrors(t *testing.T) {
 	}
 }
 
+func TestVoiceChatWritePortAndHost(t *testing.T) {
+	dir := t.TempDir()
+	conf := filepath.Join(dir, "config", "voicechat")
+	os.MkdirAll(conf, 0o755)
+	// The mod generates voice_host empty; port has a default.
+	os.WriteFile(filepath.Join(conf, "voicechat-server.properties"),
+		[]byte("port=24454\nvoice_host=\nmax_voice_distance=48\n"), 0o644)
+
+	if err := (voicechat{}).WritePort(dir, 24455); err != nil {
+		t.Fatal(err)
+	}
+	if err := SetVoiceHost(dir, "203.0.113.7"); err != nil {
+		t.Fatal(err)
+	}
+
+	got, _ := os.ReadFile(filepath.Join(conf, "voicechat-server.properties"))
+	for _, want := range []string{"port=24455", "voice_host=203.0.113.7", "max_voice_distance=48"} {
+		if !strings.Contains(string(got), want) {
+			t.Errorf("properties missing %q:\n%s", want, got)
+		}
+	}
+
+	// A file without the voice_host key → reportable error, not a silent no-op.
+	os.WriteFile(filepath.Join(conf, "voicechat-server.properties"), []byte("port=24454\n"), 0o644)
+	if err := SetVoiceHost(dir, "203.0.113.7"); err == nil {
+		t.Error("SetVoiceHost should error when voice_host key is absent")
+	}
+}
+
 func TestBlueMapPresent(t *testing.T) {
 	dir := t.TempDir()
 	if BlueMapPresent(dir) {

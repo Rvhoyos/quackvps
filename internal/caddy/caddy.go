@@ -59,7 +59,7 @@ func WriteInstanceFile(instance string, blocks []string) error {
 	return nil
 }
 
-// RemoveInstanceFile deletes an instance's site file — the whole teardown for its
+// RemoveInstanceFile deletes an instance's site file, the whole teardown for its
 // Caddy config.
 func RemoveInstanceFile(instance string) error {
 	path := filepath.Join(InstanceDir, instance+".caddy")

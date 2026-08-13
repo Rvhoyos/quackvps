@@ -74,7 +74,7 @@ func zipTree(src, prefix, dest string) error {
 func removeBackup(path string) error { return os.Remove(path) }
 
 // keepBackup wraps a failure with the manual rollback instructions, since v1 does
-// not auto-restore — the kept world zip is the way back.
+// not auto-restore, the kept world zip is the way back.
 func keepBackup(path string, cause error) error {
 	ui.Error("Update failed: %v", cause)
 	ui.Warn("Your world backup is kept at: %s", path)

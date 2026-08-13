@@ -68,7 +68,7 @@ func resolveExisting(cfg *config.Config) error {
 	choice := "update"
 	field := huh.NewSelect[string]().
 		Title(fmt.Sprintf("%s already has a server. What now?", cfg.Dir)).
-		Description("Update keeps your world and upgrades the loader/mods. Restore rolls the world back to a saved backup. Cancel lets you re-run and choose a different name — we never overwrite an existing server.").
+		Description("Update keeps your world and upgrades the loader/mods. Restore rolls the world back to a saved backup. Cancel lets you re-run and choose a different name; we never overwrite an existing server.").
 		Options(
 			huh.NewOption("Update it in place", "update"),
 			huh.NewOption("Restore a world backup", "restore"),

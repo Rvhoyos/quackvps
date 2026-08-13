@@ -23,7 +23,7 @@ type Backup struct {
 }
 
 // ListBackups returns the world backups under <dir>/backups, newest first. A
-// missing backups/ folder is not an error — it just means there's nothing to
+// missing backups/ folder is not an error, it just means there's nothing to
 // restore, and the caller reports that.
 func ListBackups(dir string) ([]Backup, error) {
 	zips, err := filepath.Glob(filepath.Join(dir, "backups", "world-*.zip"))

@@ -1,5 +1,5 @@
 // Package prompt is the interactive wizard. Its single job is to fill a
-// config.Config from the user's answers — it performs no install work whatsoever.
+// config.Config from the user's answers; it performs no install work whatsoever.
 // That strict split (wizard produces a Config; execution consumes it) is what
 // keeps a future non-interactive flag mode a thin layer rather than a rewrite.
 //

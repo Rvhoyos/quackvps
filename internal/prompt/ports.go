@@ -46,7 +46,7 @@ func askDomain(cfg *config.Config) error {
 	domain := ""
 	field := huh.NewInput().
 		Title("Domain for your web services? (leave blank if you don't have one)").
-		Description("With a domain, Caddy gets real HTTPS at sub.yourdomain — point that subdomain's DNS at this server first. Blank means we print an SSH tunnel command instead (private, no domain needed).").
+		Description("With a domain, Caddy gets real HTTPS at sub.yourdomain. Point that subdomain's DNS at this server first. Blank means we print an SSH tunnel command instead (private, no domain needed).").
 		Placeholder("example.com").
 		Value(&domain)
 	if err := field.Run(); err != nil {
@@ -103,7 +103,7 @@ func askComponentPort(cfg *config.Config, c web.Component, used map[int]bool) er
 
 func portHint(c web.Component) string {
 	if c.IsWeb() {
-		return "Bound to localhost and reached through Caddy — not exposed directly. The default is collision-checked."
+		return "Bound to localhost and reached through Caddy, not exposed directly. The default is collision-checked."
 	}
 	return "Opened in the firewall for direct connections. The default is collision-checked."
 }
@@ -156,7 +156,7 @@ func askPort(title, why string, def int, used map[int]bool) (int, error) {
 			// The default equals def and isn't in used yet, so it always passes;
 			// only a hand-typed in-use port is rejected.
 			if n != def && used[n] {
-				return fmt.Errorf("port %d is already in use — pick another", n)
+				return fmt.Errorf("port %d is already in use, pick another", n)
 			}
 			return nil
 		})
