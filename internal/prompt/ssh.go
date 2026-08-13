@@ -52,8 +52,8 @@ func askHardenSSH(ctx context.Context, cfg *config.Config) error {
 	// the key is what let you in (and turning passwords off is safe).
 	verified := false
 	verify := huh.NewConfirm().
-		Title("In a NEW terminal, run `ssh " + cfg.RunAsUser + "@<this-server>`. Did it log you in WITHOUT asking for a password?").
-		Description("No password prompt = your key works, so it's safe to turn passwords off. If it asked for a password (or failed), choose No and we'll skip hardening.").
+		Title("Did a fresh login work WITHOUT asking for a password?").
+		Description("In a NEW terminal, run `ssh " + cfg.RunAsUser + "@<this-server>`. No password prompt = your key works, so it's safe to turn passwords off. If it asked for a password (or failed), choose No and we'll skip hardening.").
 		Affirmative("Yes, no password prompt").
 		Negative("No, it asked for a password").
 		Value(&verified)
@@ -68,11 +68,23 @@ func askHardenSSH(ctx context.Context, cfg *config.Config) error {
 	return nil
 }
 
+// pubKeyHelp walks a user with no key through making one and copying it, since this
+// is the step people trip on. Do it on your OWN machine, not the server.
+const pubKeyHelp = `No key yet? On your own machine, run:  ssh-keygen -t ed25519  (press Enter through the prompts).
+That makes id_ed25519 (private, keep it, never paste) and id_ed25519.pub (public, the one to copy).
+Copy the public key to your clipboard:
+  macOS              pbcopy < ~/.ssh/id_ed25519.pub
+  Windows PowerShell Get-Content $env:USERPROFILE\.ssh\id_ed25519.pub | Set-Clipboard
+  Linux (X11)        xclip -selection clipboard < ~/.ssh/id_ed25519.pub
+  Linux (Wayland)    wl-copy < ~/.ssh/id_ed25519.pub
+Or just view it and copy the line:  cat ~/.ssh/id_ed25519.pub
+NEVER paste the private key (the long BEGIN...PRIVATE KEY block).`
+
 func askPublicKey(cfg *config.Config) error {
 	var key string
 	field := huh.NewText().
 		Title("Paste your SSH PUBLIC key (the one-line .pub, starts with ssh-ed25519).").
-		Description("On your own machine: `cat ~/.ssh/id_ed25519.pub` and copy the whole line. NEVER paste the private key (the long BEGIN...PRIVATE KEY block).").
+		Description(pubKeyHelp).
 		Validate(system.ValidatePublicKey).
 		Value(&key)
 	if err := field.Run(); err != nil {

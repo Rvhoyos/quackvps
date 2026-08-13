@@ -214,9 +214,16 @@ func askFeatures(ctx context.Context, cfg *config.Config, client modrinth.Client
 	var options []huh.Option[string]
 	if err := ui.Spinner("Checking available add-ons", func() error {
 		for _, c := range featureCandidates {
-			if allHaveBuilds(ctx, client, c.slugs, cfg.Loader, cfg.MCVersion) {
-				options = append(options, huh.NewOption(c.label, c.value))
+			if !allHaveBuilds(ctx, client, c.slugs, cfg.Loader, cfg.MCVersion) {
+				continue
 			}
+			label := c.label
+			// Crossplay lets Bedrock players in, but they can't load a Java
+			// modpack's client mods, so flag it (not blocked yet) when a pack is set.
+			if c.value == config.PortGeyser && cfg.Modpack != "" {
+				label += " (not compatible with modpacks)"
+			}
+			options = append(options, huh.NewOption(label, c.value))
 		}
 		return nil
 	}); err != nil {
@@ -229,8 +236,8 @@ func askFeatures(ctx context.Context, cfg *config.Config, client modrinth.Client
 
 	var selected []string
 	field := huh.NewMultiSelect[string]().
-		Title("Add-ons: space to toggle, enter to confirm").
-		Description("Only add-ons with a build for your version are shown. Each sets up its own port/proxy/firewall later.").
+		Title("Which add-ons do you want?").
+		Description("Space to toggle, enter to confirm. Only add-ons with a build for your version are shown. Each sets up its own port/proxy/firewall later.").
 		Options(options...).
 		Value(&selected)
 	if err := field.Run(); err != nil {
