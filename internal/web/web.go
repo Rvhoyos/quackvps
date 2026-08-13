@@ -32,8 +32,9 @@ type Component interface {
 }
 
 // Components returns the enabled components in a stable order, derived from the
-// feature flags. This is the single registry the install flow iterates.
-func Components(f config.Features) []Component {
+// feature flags. This is the single registry the install flow iterates. The loader
+// is needed by Geyser, whose config lives under a loader-specific folder.
+func Components(f config.Features, loader string) []Component {
 	var comps []Component
 	if f.Dashboard {
 		comps = append(comps, dashboard{})
@@ -46,6 +47,9 @@ func Components(f config.Features) []Component {
 	}
 	if f.VoiceChat {
 		comps = append(comps, voicechat{})
+	}
+	if f.Geyser {
+		comps = append(comps, geyser{loader})
 	}
 	return comps
 }

@@ -41,11 +41,13 @@ type Options struct {
 	Votifier  bool
 	BlueMap   bool
 	VoiceChat bool
+	Geyser    bool
 
 	DashboardPort int
 	BlueMapPort   int
 	VotifierPort  int
 	VoiceChatPort int
+	GeyserPort    int
 
 	Domain             string
 	Email              string
@@ -94,11 +96,13 @@ func Parse(args []string, out io.Writer) (opts Options, handled bool, err error)
 	fs.BoolVar(&o.Votifier, "votifier", false, "install: QuackedSMP Votifier v2 port")
 	fs.BoolVar(&o.BlueMap, "bluemap", false, "install: BlueMap live map")
 	fs.BoolVar(&o.VoiceChat, "voicechat", false, "install: Simple Voice Chat")
+	fs.BoolVar(&o.Geyser, "geyser", false, "install: Bedrock crossplay (Geyser + Floodgate)")
 
 	fs.IntVar(&o.DashboardPort, "dashboard-port", 0, "install: dashboard port (when --dashboard)")
 	fs.IntVar(&o.BlueMapPort, "bluemap-port", 0, "install: BlueMap port (when --bluemap)")
 	fs.IntVar(&o.VotifierPort, "votifier-port", 0, "install: Votifier port (when --votifier)")
 	fs.IntVar(&o.VoiceChatPort, "voicechat-port", 0, "install: voice chat port (when --voicechat)")
+	fs.IntVar(&o.GeyserPort, "geyser-port", 0, "install: Bedrock port (when --geyser)")
 
 	fs.StringVar(&o.Domain, "domain", "", "install: domain for web services (empty prints an ssh tunnel instead)")
 	fs.StringVar(&o.Email, "email", "", "install: ACME contact email (only used with --domain)")

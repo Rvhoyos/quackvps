@@ -38,10 +38,15 @@ func DNSRecordGuidance(cfg *config.Config, publicIP string) string {
 	join := cfg.Instance + "." + cfg.Domain
 	b.WriteString("\n  Minecraft join address:\n")
 	fmt.Fprintf(&b, "    %-4s %s   ->   %s\n", "A", join, publicIP)
+	if cfg.Geyser {
+		// The same A record serves Bedrock (crossplay); it needs no record of its
+		// own. The connection how-to lives in BedrockConnectGuidance.
+		fmt.Fprintf(&b, "    This A record serves both Java and Bedrock (crossplay).\n")
+	}
 	if cfg.ServerPort != defaultGamePort {
 		fmt.Fprintf(&b, "    %-4s _minecraft._tcp.%s   priority 1  weight 1  port %d  target %s\n",
 			"SRV", join, cfg.ServerPort, join)
-		fmt.Fprintf(&b, "    Players join at %s (the SRV record hides the port).\n", join)
+		fmt.Fprintf(&b, "    Java players join at %s (the SRV record hides the port).\n", join)
 	}
 	return b.String()
 }

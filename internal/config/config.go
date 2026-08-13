@@ -57,6 +57,7 @@ const (
 	PortVotifier  = "votifier"
 	PortDashboard = "dashboard"
 	PortBlueMap   = "bluemap"
+	PortGeyser    = "geyser"
 )
 
 // MinMCVersion is the oldest release we support. It's NeoForge's own floor
@@ -79,10 +80,13 @@ type Features struct {
 	Votifier  bool // QuackedSMP Votifier v2 → network port (UFW TCP)
 	BlueMap   bool // live map              → web service (Caddy)
 	VoiceChat bool // Simple Voice Chat      → network port (UFW UDP)
+	Geyser    bool // Bedrock crossplay      → network port (UFW UDP)
 }
 
 // Any reports whether any add-on was selected.
-func (f Features) Any() bool { return f.Dashboard || f.Votifier || f.BlueMap || f.VoiceChat }
+func (f Features) Any() bool {
+	return f.Dashboard || f.Votifier || f.BlueMap || f.VoiceChat || f.Geyser
+}
 
 // AnyWeb reports whether any add-on is a web (Caddy-fronted) service. Only these
 // need a domain/subdomain; Votifier and VoiceChat are plain UFW ports.
@@ -295,6 +299,9 @@ func (c *Config) featurePortKey() map[string]bool {
 	}
 	if c.VoiceChat {
 		need[PortVoiceChat] = true
+	}
+	if c.Geyser {
+		need[PortGeyser] = true
 	}
 	return need
 }

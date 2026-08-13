@@ -23,9 +23,16 @@ func TestReleasesOnly(t *testing.T) {
 		{ID: "c", VersionType: "release"},
 		{ID: "d", VersionType: "alpha"},
 	}
-	got := releasesOnly(in)
+	got := releasesOnly("some-mod", in)
 	if len(got) != 2 || got[0].ID != "a" || got[1].ID != "c" {
 		t.Errorf("releasesOnly = %+v, want the two release builds a,c", got)
+	}
+
+	// A continuous-beta project (Geyser ships only betas) keeps every build,
+	// otherwise it would be filtered to nothing and never offered.
+	kept := releasesOnly("geyser", in)
+	if len(kept) != len(in) {
+		t.Errorf("releasesOnly(geyser) = %+v, want all builds kept", kept)
 	}
 }
 

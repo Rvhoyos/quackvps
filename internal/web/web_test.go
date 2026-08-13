@@ -11,10 +11,10 @@ import (
 )
 
 func TestComponentsRegistry(t *testing.T) {
-	f := config.Features{Dashboard: true, BlueMap: true, Votifier: true, VoiceChat: true}
-	comps := Components(f)
-	if len(comps) != 4 {
-		t.Fatalf("expected 4 components, got %d", len(comps))
+	f := config.Features{Dashboard: true, BlueMap: true, Votifier: true, VoiceChat: true, Geyser: true}
+	comps := Components(f, config.LoaderNeoForge)
+	if len(comps) != 5 {
+		t.Fatalf("expected 5 components, got %d", len(comps))
 	}
 	// Web vs firewall split must match design.
 	web, net := map[string]bool{}, map[string]bool{}
@@ -37,7 +37,7 @@ func TestComponentsRegistry(t *testing.T) {
 			}
 		}
 	}
-	if !web["dashboard"] || !web["bluemap"] || !net["votifier"] || !net["voicechat"] {
+	if !web["dashboard"] || !web["bluemap"] || !net["votifier"] || !net["voicechat"] || !net["geyser"] {
 		t.Errorf("web/net split wrong: web=%v net=%v", web, net)
 	}
 }
@@ -102,6 +102,9 @@ func TestWritePortErrorsWhenConfigMissing(t *testing.T) {
 	if err := (voicechat{}).WritePort(dir, 24455); err == nil {
 		t.Error("voicechat WritePort should error when its config is absent")
 	}
+	if err := (geyser{config.LoaderNeoForge}).WritePort(dir, 19133); err == nil {
+		t.Error("geyser WritePort should error when its config is absent")
+	}
 }
 
 func TestSetHOCONKeyEditsAndErrors(t *testing.T) {
@@ -157,6 +160,76 @@ func TestVoiceChatWritePortAndHost(t *testing.T) {
 	if err := SetVoiceHost(dir, "203.0.113.7"); err == nil {
 		t.Error("SetVoiceHost should error when voice_host key is absent")
 	}
+}
+
+// geyserConfig is a trimmed Geyser config.yml with the two-section `port` that
+// makes the section-scoped edit necessary, plus comments the edit must preserve.
+const geyserConfig = `bedrock:
+  # The IP address that Geyser will bind to.
+  address: 0.0.0.0
+  # The port Geyser listens on for Bedrock.
+  port: 19132
+  clone-remote-port: false
+java:
+  # The IP address of the Java server.
+  address: 127.0.0.1
+  port: 25565
+  # floodgate, online, or offline.
+  auth-type: online
+`
+
+func TestGeyserWritePort(t *testing.T) {
+	dir := t.TempDir()
+	conf := GeyserConfigPath(dir, config.LoaderFabric)
+	os.MkdirAll(filepath.Dir(conf), 0o755)
+	os.WriteFile(conf, []byte(geyserConfig), 0o644)
+
+	if err := (geyser{config.LoaderFabric}).WritePort(dir, 19133); err != nil {
+		t.Fatal(err)
+	}
+
+	got := string(mustRead(t, conf))
+	if !strings.Contains(got, "  port: 19133") {
+		t.Errorf("bedrock port not set:\n%s", got)
+	}
+	// The Java-server port shares the key name but must be left untouched.
+	if !strings.Contains(got, "  port: 25565") {
+		t.Errorf("java port was clobbered:\n%s", got)
+	}
+	if !strings.Contains(got, "auth-type: floodgate") {
+		t.Errorf("auth-type not switched to floodgate:\n%s", got)
+	}
+	// Comments and untouched keys survive.
+	for _, keep := range []string{"# The port Geyser listens on for Bedrock.", "clone-remote-port: false", "address: 0.0.0.0"} {
+		if !strings.Contains(got, keep) {
+			t.Errorf("edit lost %q:\n%s", keep, got)
+		}
+	}
+}
+
+func TestSetYAMLSectionKeyErrors(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.yml")
+	os.WriteFile(path, []byte(geyserConfig), 0o644)
+
+	// Missing section → reportable error.
+	if err := setYAMLSectionKey(path, "nope", []string{"port"}, "1"); err == nil {
+		t.Error("expected error for a missing section")
+	}
+	// Section present but key absent within it → reportable error (not a silent
+	// no-op, and not reaching into another section).
+	if err := setYAMLSectionKey(path, "bedrock", []string{"auth-type"}, "x"); err == nil {
+		t.Error("expected error when the key is absent from the section")
+	}
+}
+
+func mustRead(t *testing.T, path string) []byte {
+	t.Helper()
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return data
 }
 
 func TestBlueMapPresent(t *testing.T) {
@@ -266,5 +339,47 @@ func TestDNSRecordGuidance(t *testing.T) {
 	}
 	if strings.Contains(got, "SRV") || strings.Contains(got, "_minecraft._tcp") {
 		t.Errorf("standard port should get no SRV record:\n%s", got)
+	}
+}
+
+func TestDNSRecordGuidanceBedrock(t *testing.T) {
+	cfg := config.New()
+	cfg.Instance = "survival"
+	cfg.Domain = "example.com"
+	cfg.ServerPort = 25565 // default Java port, so no Java SRV muddies the check
+	cfg.Geyser = true
+	cfg.Ports = map[string]int{config.PortGeyser: 19132}
+
+	got := DNSRecordGuidance(cfg, "1.2.3.4")
+	// dns.go only lists records to create: the one join A record serves both editions.
+	if !strings.Contains(got, "serves both Java and Bedrock") {
+		t.Errorf("guidance should note the A record serves Bedrock too:\n%s", got)
+	}
+	// Bedrock never gets a record of its own; connection fields live elsewhere now.
+	if strings.Contains(got, "Server Address:") || strings.Contains(got, "_minecraft._udp") {
+		t.Errorf("dns.go should not carry Bedrock connect fields or a Bedrock SRV:\n%s", got)
+	}
+}
+
+func TestBedrockConnectGuidance(t *testing.T) {
+	// Default port: the note still tells players a 19132 server skips the port field.
+	got := BedrockConnectGuidance("play.example.com", 19132)
+	for _, want := range []string{"Server Address: play.example.com", "Port:", "19132", "several crossplay servers"} {
+		if !strings.Contains(got, want) {
+			t.Errorf("guidance missing %q:\n%s", want, got)
+		}
+	}
+
+	// Non-default port (a bumped second instance): the actual port is shown. It may
+	// mention SRV for Java, but must never suggest a Bedrock SRV record.
+	got = BedrockConnectGuidance("1.2.3.4", 19133)
+	if !strings.Contains(got, "Port:           19133") {
+		t.Errorf("guidance missing the chosen port:\n%s", got)
+	}
+	if !strings.Contains(got, "Java players") {
+		t.Errorf("guidance should scope the port rule to Bedrock and clear Java:\n%s", got)
+	}
+	if strings.Contains(got, "_minecraft") {
+		t.Errorf("bedrock guidance must never suggest a Bedrock SRV record:\n%s", got)
 	}
 }

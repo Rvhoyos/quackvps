@@ -66,6 +66,7 @@ func configureInstall(cfg *config.Config, opts Options) error {
 		Votifier:  opts.Votifier,
 		BlueMap:   opts.BlueMap,
 		VoiceChat: opts.VoiceChat,
+		Geyser:    opts.Geyser,
 	}
 
 	// Feature-derived mods, mirroring the wizard's askFeatures: BlueMap and Simple
@@ -76,6 +77,9 @@ func configureInstall(cfg *config.Config, opts Options) error {
 	}
 	if cfg.VoiceChat {
 		cfg.Mods = append(cfg.Mods, catalog.SlugVoiceChat)
+	}
+	if cfg.Geyser {
+		cfg.Mods = append(cfg.Mods, catalog.SlugGeyser, catalog.SlugFloodgate)
 	}
 	if cfg.Dashboard || cfg.Votifier {
 		cfg.Mods = append(cfg.Mods, catalog.SlugQuackedSMP)
@@ -89,6 +93,7 @@ func configureInstall(cfg *config.Config, opts Options) error {
 		config.PortBlueMap:   opts.BlueMapPort,
 		config.PortVotifier:  opts.VotifierPort,
 		config.PortVoiceChat: opts.VoiceChatPort,
+		config.PortGeyser:    opts.GeyserPort,
 	}
 	subs := map[string]string{
 		config.PortDashboard: opts.DashboardSubdomain,
@@ -105,7 +110,7 @@ func configureInstall(cfg *config.Config, opts Options) error {
 		}
 		used = u
 	}
-	for _, c := range web.Components(cfg.Features) {
+	for _, c := range web.Components(cfg.Features, cfg.Loader) {
 		if p := ports[c.Key()]; p != 0 {
 			cfg.Ports[c.Key()] = p
 		}

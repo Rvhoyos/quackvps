@@ -72,6 +72,8 @@ func TestConfigureInstallMapping(t *testing.T) {
 		Dashboard:          true,
 		DashboardPort:      8125,
 		DashboardSubdomain: "status",
+		Geyser:             true,
+		GeyserPort:         19132,
 		Domain:             "example.com",
 	}
 	cfg := config.New()
@@ -86,8 +88,15 @@ func TestConfigureInstallMapping(t *testing.T) {
 	if !hasMod(cfg.Mods, "bluemap") || !hasMod(cfg.Mods, "quackedsmp") {
 		t.Errorf("mods %v missing bluemap/quackedsmp", cfg.Mods)
 	}
+	// Crossplay is one checkbox that pulls in both mods.
+	if !hasMod(cfg.Mods, "geyser") || !hasMod(cfg.Mods, "floodgate") {
+		t.Errorf("mods %v missing geyser/floodgate", cfg.Mods)
+	}
 	if cfg.Ports[config.PortBlueMap] != 8100 || cfg.Ports[config.PortDashboard] != 8125 {
 		t.Errorf("ports = %v", cfg.Ports)
+	}
+	if cfg.Ports[config.PortGeyser] != 19132 {
+		t.Errorf("geyser port = %v, want 19132", cfg.Ports[config.PortGeyser])
 	}
 	if _, ok := cfg.Ports[config.PortVoiceChat]; ok {
 		t.Error("disabled voicechat should carry no port")

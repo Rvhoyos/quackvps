@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"strings"
 
 	"github.com/rvhoyos/quackvps/internal/minecraft"
 )
@@ -28,6 +29,8 @@ var (
 	keysSectionEnabled  = []string{"enabled"}
 	keysPanelURL        = []string{"panel_url"}
 	keysVoicechatEnable = []string{"voicechat_enable"}
+	keysGeyserPort      = []string{"port"}
+	keysGeyserAuth      = []string{"auth-type"}
 )
 
 // quackedsmpConfig is the path to the QuackedSMP mod config within an instance.
@@ -156,6 +159,52 @@ func setHOCONKey(path string, candidates []string, value string) error {
 		}
 	}
 	return fmt.Errorf("none of %v found in %s, the mod's config format may have changed; please report this", candidates, path)
+}
+
+// setYAMLSectionKey sets the first matching candidate key that lives inside a
+// top-level YAML section (e.g. `port` under `bedrock:`). It edits only within that
+// section's indented block, so a key that also appears in another section (Geyser's
+// `port` exists under both `bedrock` and `java`) is left untouched elsewhere. Like
+// setHOCONKey it's edit-only and comment-preserving: a missing file, a missing
+// section, or a missing key is a reportable error, never a fabricated line.
+func setYAMLSectionKey(path, section string, candidates []string, value string) error {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return fmt.Errorf("%s not found, the server didn't generate it; please report this", path)
+		}
+		return fmt.Errorf("read %s: %w", path, err)
+	}
+	lines := strings.Split(string(data), "\n")
+
+	header := regexp.MustCompile(`^` + regexp.QuoteMeta(section) + `:\s*$`)
+	start := -1
+	for i, line := range lines {
+		if header.MatchString(line) {
+			start = i + 1
+			break
+		}
+	}
+	if start < 0 {
+		return fmt.Errorf("section %q not found in %s, the mod's config format may have changed; please report this", section, path)
+	}
+
+	// The section's body is its indented lines; the first line starting at column 0
+	// (the next top-level key or comment) ends the block.
+	topLevel := regexp.MustCompile(`^\S`)
+	for i := start; i < len(lines); i++ {
+		if topLevel.MatchString(lines[i]) {
+			break
+		}
+		for _, key := range candidates {
+			re := regexp.MustCompile(`^(\s+)` + regexp.QuoteMeta(key) + `\s*:\s*.*$`)
+			if re.MatchString(lines[i]) {
+				lines[i] = re.ReplaceAllString(lines[i], "${1}"+key+": "+value)
+				return os.WriteFile(path, []byte(strings.Join(lines, "\n")), 0o644)
+			}
+		}
+	}
+	return fmt.Errorf("none of %v found in section %q of %s, the mod's config format may have changed; please report this", candidates, section, path)
 }
 
 // setPropKey sets the first matching candidate key in an existing .properties

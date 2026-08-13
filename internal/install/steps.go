@@ -125,6 +125,9 @@ func expectedConfigFiles(cfg *config.Config) []string {
 	if cfg.VoiceChat {
 		files = append(files, filepath.Join(cfg.Dir, "config", "voicechat", "voicechat-server.properties"))
 	}
+	if cfg.Geyser {
+		files = append(files, web.GeyserConfigPath(cfg.Dir, cfg.Loader))
+	}
 	return files
 }
 
@@ -298,7 +301,7 @@ func explainFirstRunFailure(cfg *config.Config, err error) error {
 // Voice Chat at the box's public IP, and sets the two cross-config QuackedSMP
 // fields (panel_url, voicechat_enable).
 func writeWebConfigs(cfg *config.Config) error {
-	for _, c := range web.Components(cfg.Features) {
+	for _, c := range web.Components(cfg.Features, cfg.Loader) {
 		if err := c.WritePort(cfg.Dir, cfg.Ports[c.Key()]); err != nil {
 			return err
 		}
@@ -346,7 +349,7 @@ func configureCaddy(ctx context.Context, cfg *config.Config) error {
 	}
 
 	var blocks []string
-	for _, c := range web.Components(cfg.Features) {
+	for _, c := range web.Components(cfg.Features, cfg.Loader) {
 		if !c.IsWeb() {
 			continue
 		}
@@ -398,7 +401,7 @@ func configureFirewall(ctx context.Context, cfg *config.Config) error {
 			return err
 		}
 	}
-	for _, c := range web.Components(cfg.Features) {
+	for _, c := range web.Components(cfg.Features, cfg.Loader) {
 		if c.IsWeb() {
 			continue // web ports stay internal, reached via Caddy
 		}

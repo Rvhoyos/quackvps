@@ -23,6 +23,12 @@ const (
 	// features means we must also download the mod itself.
 	SlugBlueMap   = "bluemap"
 	SlugVoiceChat = "simple-voice-chat"
+
+	// Geyser (the Bedrock↔Java bridge) and Floodgate (lets Bedrock players join
+	// without a paid Java account) together make up the crossplay add-on. Both are
+	// standalone Modrinth mods, so selecting crossplay downloads both.
+	SlugGeyser    = "geyser"
+	SlugFloodgate = "floodgate"
 )
 
 // ModpackOffer is a curated modpack the user can install for the chosen loader +

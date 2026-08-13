@@ -32,7 +32,7 @@ func askDomainAndPorts(ctx context.Context, cfg *config.Config) error {
 	if err := askServerPort(cfg, used); err != nil {
 		return err
 	}
-	for _, c := range web.Components(cfg.Features) {
+	for _, c := range web.Components(cfg.Features, cfg.Loader) {
 		if err := askComponentPort(cfg, c, used); err != nil {
 			return err
 		}
@@ -120,7 +120,7 @@ func askSubdomains(cfg *config.Config) error {
 	if err != nil {
 		return err
 	}
-	for _, c := range web.Components(cfg.Features) {
+	for _, c := range web.Components(cfg.Features, cfg.Loader) {
 		if !c.IsWeb() {
 			continue
 		}

@@ -190,13 +190,20 @@ func slugFromInput(s string) string {
 	return s
 }
 
-// featureCandidate is an add-on the wizard can offer.
-type featureCandidate struct{ slug, value, label string }
+// featureCandidate is an add-on the wizard can offer. It's shown only when every
+// slug it needs has a build for the chosen loader+MC, so a multi-mod feature like
+// crossplay (Geyser + Floodgate) appears only when both are installable.
+type featureCandidate struct {
+	slugs []string
+	value string
+	label string
+}
 
 var featureCandidates = []featureCandidate{
-	{catalog.SlugQuackedSMP, "quackedsmp", "QuackedSMP (web dashboard, claims, votifier, voice hooks)"},
-	{catalog.SlugBlueMap, config.PortBlueMap, "BlueMap (live web map)"},
-	{catalog.SlugVoiceChat, config.PortVoiceChat, "Simple Voice Chat (proximity voice)"},
+	{[]string{catalog.SlugQuackedSMP}, "quackedsmp", "QuackedSMP (web dashboard, claims, votifier, voice hooks)"},
+	{[]string{catalog.SlugBlueMap}, config.PortBlueMap, "BlueMap (live web map)"},
+	{[]string{catalog.SlugVoiceChat}, config.PortVoiceChat, "Simple Voice Chat (proximity voice)"},
+	{[]string{catalog.SlugGeyser, catalog.SlugFloodgate}, config.PortGeyser, "Bedrock crossplay (Geyser + Floodgate: let Bedrock players join)"},
 }
 
 // askFeatures is the one add-on screen. It offers only the add-ons that have a
@@ -207,7 +214,7 @@ func askFeatures(ctx context.Context, cfg *config.Config, client modrinth.Client
 	var options []huh.Option[string]
 	if err := ui.Spinner("Checking available add-ons", func() error {
 		for _, c := range featureCandidates {
-			if catalog.HasBuild(ctx, client, c.slug, cfg.Loader, cfg.MCVersion) {
+			if allHaveBuilds(ctx, client, c.slugs, cfg.Loader, cfg.MCVersion) {
 				options = append(options, huh.NewOption(c.label, c.value))
 			}
 		}
@@ -242,6 +249,9 @@ func askFeatures(ctx context.Context, cfg *config.Config, client modrinth.Client
 		case config.PortVoiceChat:
 			cfg.VoiceChat = true
 			cfg.Mods = append(cfg.Mods, catalog.SlugVoiceChat)
+		case config.PortGeyser:
+			cfg.Geyser = true
+			cfg.Mods = append(cfg.Mods, catalog.SlugGeyser, catalog.SlugFloodgate)
 		case "quackedsmp":
 			cfg.Mods = append(cfg.Mods, catalog.SlugQuackedSMP)
 			if err := askQuackedSMPSubPrompts(cfg); err != nil {
@@ -250,6 +260,17 @@ func askFeatures(ctx context.Context, cfg *config.Config, client modrinth.Client
 		}
 	}
 	return nil
+}
+
+// allHaveBuilds reports whether every slug has a build for the loader+MC, so a
+// feature that needs more than one mod is offered only when all of them install.
+func allHaveBuilds(ctx context.Context, client modrinth.Client, slugs []string, loader, mc string) bool {
+	for _, slug := range slugs {
+		if !catalog.HasBuild(ctx, client, slug, loader, mc) {
+			return false
+		}
+	}
+	return true
 }
 
 // askQuackedSMPSubPrompts asks the two bundled QuackedSMP features: its web

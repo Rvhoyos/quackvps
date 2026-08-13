@@ -24,15 +24,28 @@ func (c *HTTPClient) Versions(ctx context.Context, slug string, loaders, gameVer
 	if err := dl.GetJSON(ctx, endpoint, &versions); err != nil {
 		return nil, fmt.Errorf("list versions for %s: %w", slug, err)
 	}
-	return releasesOnly(versions), nil
+	return releasesOnly(slug, versions), nil
+}
+
+// prereleaseChannels are projects whose stable channel on Modrinth is "beta", not
+// "release". Geyser only ever ships beta builds, that's its normal release model,
+// not an unstable snapshot, so filtering to release would hide it entirely. Its
+// config schema is stable across those builds, so keeping them is safe. (The slug
+// is a literal because modrinth can't import catalog; it mirrors catalog.SlugGeyser.)
+var prereleaseChannels = map[string]bool{
+	"geyser": true,
 }
 
 // releasesOnly drops beta and alpha builds. A mod's version_type is author-set,
 // and a pre-release often carries a config schema the stable editors don't
 // understand (e.g. QuackedSMP's beta builds below 1.21.11 lack the dashboard key),
 // so offering them means installing something that can't be configured. Modrinth's
-// version endpoint has no version_type filter, so we do it here.
-func releasesOnly(versions []Version) []Version {
+// version endpoint has no version_type filter, so we do it here. Projects in
+// prereleaseChannels are exempt, their beta channel is their stable one.
+func releasesOnly(slug string, versions []Version) []Version {
+	if prereleaseChannels[slug] {
+		return versions
+	}
 	kept := versions[:0]
 	for _, v := range versions {
 		if v.VersionType == "release" {

@@ -22,10 +22,21 @@ func printSummary(cfg *config.Config) {
 
 	ui.Success("Server %q is running.", cfg.Instance)
 	ui.Bullet(
-		fmt.Sprintf("Connect in Minecraft: %s:%d", host, cfg.ServerPort),
+		fmt.Sprintf("Connect in Minecraft (Java): %s:%d", host, cfg.ServerPort),
 		fmt.Sprintf("Live console: screen -r %s (as %s)", cfg.Instance, cfg.RunAsUser),
 		fmt.Sprintf("Service: systemctl status %s", minecraft.UnitName(cfg.Instance)),
 	)
+
+	// Bedrock connects through Geyser, with its own rules (address+port separate, no
+	// DNS port). Show the block on both paths, addressed by domain when there is one.
+	if cfg.Geyser {
+		bedrockHost := host
+		if cfg.Domain != "" {
+			bedrockHost = cfg.Instance + "." + cfg.Domain
+		}
+		fmt.Println()
+		fmt.Print(web.BedrockConnectGuidance(bedrockHost, cfg.Ports[config.PortGeyser]))
+	}
 
 	if summary := web.AccessSummary(cfg, cfg.RunAsUser+"@"+host); summary != "" {
 		fmt.Println()
