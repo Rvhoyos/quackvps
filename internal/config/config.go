@@ -9,6 +9,7 @@ package config
 
 import (
 	"fmt"
+	"net/mail"
 	"path/filepath"
 	"strings"
 
@@ -238,7 +239,29 @@ func (c *Config) validateInstall() error {
 	if err := c.validateUniquePorts(); err != nil {
 		return err
 	}
+	if err := ValidateEmail(c.Email); err != nil {
+		return err
+	}
 	return c.validateSubdomains()
+}
+
+// ValidateEmail accepts a blank address (the ACME contact is optional) or a
+// single plain address like you@example.com. It rejects display-name forms
+// ("You <a@b>") and domains with no dot — the usual typos — so a malformed
+// contact never reaches the Caddyfile's global block.
+func ValidateEmail(s string) error {
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return nil
+	}
+	addr, err := mail.ParseAddress(s)
+	if err != nil || addr.Address != s {
+		return fmt.Errorf("not a valid email address: %q", s)
+	}
+	if _, domain, _ := strings.Cut(s, "@"); !strings.Contains(domain, ".") {
+		return fmt.Errorf("email domain looks incomplete (no dot): %q", s)
+	}
+	return nil
 }
 
 func validateMCVersion(s string) error {

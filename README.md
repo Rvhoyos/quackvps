@@ -19,6 +19,40 @@ This installs quackvps to `/usr/local/bin`, so afterwards it's just `sudo quackv
 
 Answer the prompts, or press Enter through to accept the defaults.
 
+<details>
+<summary>First time on a fresh VPS? Start here</summary>
+
+A new VPS logs you in as `root` with the password your host gave you:
+
+```sh
+ssh root@YOUR_VPS_IP
+```
+
+quackvps runs the server as a normal user, not root, so create one (it also
+needs `sudo`):
+
+```sh
+adduser YOURNAME
+usermod -aG sudo YOURNAME
+```
+
+Log back in as that user, then paste the install command above:
+
+```sh
+ssh YOURNAME@YOUR_VPS_IP
+```
+
+If you later reinstall the OS, SSH will refuse with `REMOTE HOST IDENTIFICATION
+HAS CHANGED` because the server's key is new. Clear the old one and reconnect:
+
+```sh
+ssh-keygen -R YOUR_VPS_IP
+```
+
+On Windows, run the same `ssh` and `ssh-keygen` commands from PowerShell; the
+OpenSSH client ships with Windows 10 (1809+) and 11.
+</details>
+
 ## What it does
 
 - Installs the server (Fabric, NeoForge, Forge, Quilt, or Vanilla) with the matching Java, side by side, without touching your system Java.

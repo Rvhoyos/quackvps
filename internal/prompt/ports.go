@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strconv"
+	"strings"
 
 	"github.com/charmbracelet/huh"
 
@@ -62,12 +63,13 @@ func askEmail(cfg *config.Config) error {
 	email := ""
 	field := huh.NewInput().
 		Title("Email for HTTPS certificates? (optional)").
-		Description("Let's Encrypt uses it for expiry notices. Only added if your Caddyfile has no contact yet; leave blank to skip.").
+		Description("Caddy gives this to Let's Encrypt when it registers your certificate account, so the CA can reach you if issuing or renewing ever fails. Only added if your Caddyfile has no contact yet; leave blank to skip (certs still work).").
+		Validate(config.ValidateEmail).
 		Value(&email)
 	if err := field.Run(); err != nil {
 		return err
 	}
-	cfg.Email = email
+	cfg.Email = strings.TrimSpace(email)
 	return nil
 }
 

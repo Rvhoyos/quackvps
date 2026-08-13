@@ -51,6 +51,7 @@ func TestValidateFailures(t *testing.T) {
 			c.Votifier = true
 			c.Ports[PortVotifier] = 25565 // same as server port
 		}},
+		{"malformed email", func(c *Config) { c.Email = "not-an-email" }},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -60,6 +61,28 @@ func TestValidateFailures(t *testing.T) {
 				t.Errorf("expected validation error for %s", tt.name)
 			}
 		})
+	}
+}
+
+func TestValidateEmail(t *testing.T) {
+	tests := []struct {
+		in string
+		ok bool
+	}{
+		{"", true},                       // optional
+		{"  ", true},                     // blank after trim
+		{"you@example.com", true},        // plain address
+		{" you@example.com ", true},      // trimmed
+		{"a.b+tag@sub.example.co", true}, // still a plain address
+		{"not-an-email", false},          // no @
+		{"you@localhost", false},         // domain has no dot
+		{"You <you@example.com>", false}, // display-name form
+		{"a@b@c.com", false},             // two @
+	}
+	for _, tt := range tests {
+		if err := ValidateEmail(tt.in); (err == nil) != tt.ok {
+			t.Errorf("ValidateEmail(%q): got err=%v, want ok=%v", tt.in, err, tt.ok)
+		}
 	}
 }
 
