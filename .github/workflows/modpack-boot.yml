@@ -97,11 +97,11 @@ jobs:
             --reason-file "$RUNNER_TEMP/reason.txt"
           code=$?
           if [ $code -eq 0 ]; then
-            row="| ${{ needs.select.outputs.slug }} | ${{ matrix.pack.mc }} | ✅ booted | — |"
+            row="| ${{ needs.select.outputs.slug }} | ${{ matrix.pack.mc }} | ${{ matrix.pack.java }} | ✅ booted | — |"
           else
             reason=$(head -1 "$RUNNER_TEMP/reason.txt" 2>/dev/null)
             [ -z "$reason" ] && reason="failed to boot"
-            row="| ${{ needs.select.outputs.slug }} | ${{ matrix.pack.mc }} | ❌ failed | $reason |"
+            row="| ${{ needs.select.outputs.slug }} | ${{ matrix.pack.mc }} | ${{ matrix.pack.java }} | ❌ failed | $reason |"
           fi
           echo "$row" > "$RUNNER_TEMP/result.md"
           echo "$row" >> "$GITHUB_STEP_SUMMARY"
@@ -134,10 +134,20 @@ jobs:
           merge-multiple: true
           path: results
       - run: |
+          # Each result-*.md artifact is exactly one version's row, so the file
+          # count is the versions tested and the ones containing ❌ are the failures.
+          total=$(ls results/*.md 2>/dev/null | wc -l | tr -d ' ')
+          failed=$(grep -l '❌' results/*.md 2>/dev/null | wc -l | tr -d ' ')
           {
-            echo "## Modpack boot test — ${{ needs.select.outputs.slug }}"
+            echo "## Modpack boot test — ${{ needs.select.outputs.slug }} (${{ needs.select.outputs.loader }})"
             echo ""
-            echo "| pack | version | result | reason |"
-            echo "|------|---------|--------|--------|"
-            cat results/*.md 2>/dev/null || echo "| — | — | no results | — |"
+            echo "| pack | mc | java | result | reason |"
+            echo "|------|----|------|--------|--------|"
+            cat results/*.md 2>/dev/null || echo "| — | — | — | no results | — |"
+            echo ""
+            if [ "$total" -gt 0 ]; then
+              echo "**$((total - failed))/$total booted — $failed failed ($((failed * 100 / total))% of versions).**"
+            else
+              echo "**No versions tested (the pack had no buildable versions).**"
+            fi
           } >> "$GITHUB_STEP_SUMMARY"

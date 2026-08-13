@@ -307,16 +307,21 @@ func TestDNSRecordGuidance(t *testing.T) {
 	cfg.Features = config.Features{Dashboard: true, BlueMap: true}
 	cfg.Subdomains = map[string]string{"dashboard": "status", "bluemap": "map"}
 
-	// No domain → no records to create.
-	if got := DNSRecordGuidance(cfg, "1.2.3.4"); got != "" {
-		t.Errorf("no-domain path should print nothing, got:\n%s", got)
+	// No domain → the light teaching note: a placeholder record with the real IP,
+	// not the full per-subdomain record list.
+	got := DNSRecordGuidance(cfg, "1.2.3.4")
+	if !strings.Contains(got, "<your-domain>") || !strings.Contains(got, "1.2.3.4") {
+		t.Errorf("no-domain guidance should show a placeholder record with the IP:\n%s", got)
+	}
+	if strings.Contains(got, "records to create") || strings.Contains(got, "status.") {
+		t.Errorf("no-domain path should not print the full domain record list:\n%s", got)
 	}
 
 	cfg.Domain = "example.com"
 
 	// Non-standard game port → SRV record present.
 	cfg.ServerPort = 25567
-	got := DNSRecordGuidance(cfg, "1.2.3.4")
+	got = DNSRecordGuidance(cfg, "1.2.3.4")
 	for _, want := range []string{
 		"1.2.3.4",
 		"A    status.example.com",
@@ -358,6 +363,31 @@ func TestDNSRecordGuidanceBedrock(t *testing.T) {
 	// Bedrock never gets a record of its own; connection fields live elsewhere now.
 	if strings.Contains(got, "Server Address:") || strings.Contains(got, "_minecraft._udp") {
 		t.Errorf("dns.go should not carry Bedrock connect fields or a Bedrock SRV:\n%s", got)
+	}
+}
+
+func TestNoDomainGuidance(t *testing.T) {
+	cfg := config.New()
+	cfg.Instance = "survival"
+	cfg.ServerPort = 25565 // default → no SRV tip
+	cfg.Geyser = true      // → the Bedrock line
+
+	got := DNSRecordGuidance(cfg, "2.25.105.33")
+	t.Logf("\n%s", got) // eyeball the rendered copy
+	for _, want := range []string{"No domain", "A    <your-domain>   ->   2.25.105.33", "Bedrock players put <your-domain>"} {
+		if !strings.Contains(got, want) {
+			t.Errorf("no-domain guidance missing %q:\n%s", want, got)
+		}
+	}
+	// Default port and this is a teaching note, not a record list.
+	if strings.Contains(got, "SRV") || strings.Contains(got, "records to create") {
+		t.Errorf("default-port no-domain note should stay minimal:\n%s", got)
+	}
+
+	// Without crossplay, no Bedrock line.
+	cfg.Geyser = false
+	if got := DNSRecordGuidance(cfg, "2.25.105.33"); strings.Contains(got, "Bedrock") {
+		t.Errorf("no-geyser note should not mention Bedrock:\n%s", got)
 	}
 }
 
