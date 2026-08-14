@@ -37,6 +37,8 @@ func DNSRecordGuidance(cfg *config.Config, publicIP string) string {
 	join := cfg.Instance + "." + cfg.Domain
 	b.WriteString("\n  Minecraft join address:\n")
 	fmt.Fprintf(&b, "    %-4s %s   ->   %s\n", "A", join, publicIP)
+	b.WriteString("    On Cloudflare, set this record to DNS only (grey cloud). The proxy only\n")
+	b.WriteString("    carries web traffic, so a proxied record blocks the game connection.\n")
 	if cfg.Geyser {
 		// The same A record serves Bedrock (crossplay); it needs no record of its
 		// own. The connection how-to lives in BedrockConnectGuidance.

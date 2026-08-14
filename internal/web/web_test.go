@@ -259,8 +259,10 @@ func TestResetBlueMapMaps(t *testing.T) {
 	if err := ResetBlueMapMaps(dir); err != nil {
 		t.Fatal(err)
 	}
-	if left, _ := filepath.Glob(filepath.Join(maps, "*.conf")); len(left) != 0 {
-		t.Errorf("map configs not reset: %v", left)
+	// The maps folder itself must be gone: BlueMap only regenerates defaults when it
+	// is absent, so an empty-but-present folder would leave the map broken.
+	if _, err := os.Stat(maps); !os.IsNotExist(err) {
+		t.Errorf("maps dir still present after reset (err=%v); BlueMap won't regenerate", err)
 	}
 	for _, keep := range []string{"core.conf", "webserver.conf"} {
 		if _, err := os.Stat(filepath.Join(base, keep)); err != nil {
@@ -330,6 +332,8 @@ func TestDNSRecordGuidance(t *testing.T) {
 		"SRV  _minecraft._tcp.survival.example.com",
 		"port 25567",
 		"target survival.example.com",
+		// The join A record must not be Cloudflare-proxied, or the game port is blocked.
+		"DNS only (grey cloud)",
 	} {
 		if !strings.Contains(got, want) {
 			t.Errorf("guidance missing %q:\n%s", want, got)

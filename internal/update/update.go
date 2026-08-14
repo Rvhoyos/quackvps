@@ -117,8 +117,10 @@ func upgrade(ctx context.Context, cfg *config.Config, resolved map[string]modrin
 		return err
 	}
 	if web.BlueMapPresent(cfg.Dir) {
-		// The upgraded BlueMap regenerates fresh map configs on the next boot; the
-		// old ones may be a schema it now rejects. See web.ResetBlueMapMaps.
+		// Remove the maps dir so the upgraded BlueMap regenerates fresh map configs
+		// on the next boot (the old ones may be a schema it now rejects). It only
+		// regenerates when that folder is absent, not merely empty. See
+		// web.ResetBlueMapMaps.
 		if err := web.ResetBlueMapMaps(cfg.Dir); err != nil {
 			return err
 		}

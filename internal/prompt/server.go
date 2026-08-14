@@ -43,7 +43,7 @@ func askInstanceName(parent string) (string, error) {
 	var name string
 	field := huh.NewInput().
 		Title("Name this server").
-		Description(fmt.Sprintf("A short name like 'survival'. It becomes the folder %s/<name>, the service, and the screen session.", parent)).
+		Description(fmt.Sprintf("A short name like 'survival'. It becomes the folder %s/<name>, the service, and the screen session. To update or restore an existing server, enter its name here.", parent)).
 		Placeholder("survival").
 		Validate(func(s string) error {
 			if s == "" {

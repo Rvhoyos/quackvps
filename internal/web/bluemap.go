@@ -46,21 +46,19 @@ func BlueMapPresent(dir string) bool {
 	return err == nil && info.IsDir()
 }
 
-// ResetBlueMapMaps deletes the map configs under config/bluemap/maps so an upgraded
-// BlueMap regenerates fresh defaults on its next boot. BlueMap only writes a default
-// when the file is absent and refuses to auto-migrate an outdated one, so a version
-// jump that changes the map-config schema needs the old files gone. It touches only
-// the map configs, never core.conf/webserver.conf, which carry our port and
-// accept-download edits. A missing maps directory is not an error.
+// ResetBlueMapMaps removes the config/bluemap/maps directory so an upgraded BlueMap
+// regenerates fresh default map configs on its next boot. A version jump can change
+// the map-config schema and BlueMap won't auto-migrate an outdated one, so the old
+// configs have to go. It must delete the whole directory, not just the .conf files:
+// BlueMap regenerates defaults only when the maps folder is absent (its check is
+// `if (!Files.exists(mapConfigFolder))`) — an empty-but-present folder yields zero
+// maps and it disables itself. Everything outside maps/ is left alone, so
+// core.conf/webserver.conf keep our port and accept-download edits. A missing maps
+// directory is not an error.
 func ResetBlueMapMaps(dir string) error {
-	confs, err := filepath.Glob(filepath.Join(dir, "config", "bluemap", "maps", "*.conf"))
-	if err != nil {
-		return fmt.Errorf("list bluemap map configs: %w", err)
-	}
-	for _, conf := range confs {
-		if err := os.Remove(conf); err != nil {
-			return fmt.Errorf("reset bluemap map config %s: %w", filepath.Base(conf), err)
-		}
+	maps := filepath.Join(dir, "config", "bluemap", "maps")
+	if err := os.RemoveAll(maps); err != nil {
+		return fmt.Errorf("reset bluemap maps: %w", err)
 	}
 	return nil
 }
