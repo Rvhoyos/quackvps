@@ -9,6 +9,8 @@
 
 Set up a modded Minecraft server and its web layer (panel, live map, HTTPS, firewall) on a fresh Ubuntu/Debian VPS.
 
+[![Watch the tutorial](docs/tutorial-thumbnail.png)](https://www.youtube.com/watch?v=kWWR3b8d7yw)
+
 SSH into your VPS and paste:
 
 ```sh
