@@ -4,7 +4,6 @@
 [![Downloads](https://img.shields.io/github/downloads/rvhoyos/quackvps/total)](https://github.com/rvhoyos/quackvps/releases)
 [![CI](https://img.shields.io/github/actions/workflow/status/rvhoyos/quackvps/ci.yml?branch=main&label=CI)](https://github.com/rvhoyos/quackvps/actions/workflows/ci.yml)
 [![License: GPLv3](https://img.shields.io/github/license/rvhoyos/quackvps)](LICENSE)
-[![Go Report Card](https://goreportcard.com/badge/github.com/rvhoyos/quackvps)](https://goreportcard.com/report/github.com/rvhoyos/quackvps)
 [![Buy Me a Coffee](https://img.shields.io/badge/Buy_Me_a_Coffee-support-ffdd00?logo=buymeacoffee&logoColor=black)](https://buymeacoffee.com/monte.carlo.sim)
 
 Set up a modded Minecraft server and its web layer (panel, live map, HTTPS, firewall) on a fresh Ubuntu/Debian VPS.

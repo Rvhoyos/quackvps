@@ -44,21 +44,51 @@ type featuredPack struct {
 }
 
 // Pack is a curated modpack tagged with the loader it belongs to, the flattened
-// form of the per-loader featured lists. The boot-test CI walks these.
+// form of the per-loader featured lists. The boot-test CI walks these. Disabled
+// marks a pack that stays in the list (so the CI day-index doesn't shift) but is
+// never booted or offered — see disabledPacks.
 type Pack struct {
-	Slug   string
-	Loader string
-	Title  string
+	Slug     string
+	Loader   string
+	Title    string
+	Disabled bool
+}
+
+// disabledPack identifies a curated pack pulled from rotation for one loader.
+type disabledPack struct{ loader, slug string }
+
+// disabledPacks are packs the boot-test CI caught failing to boot. They stay in
+// featured() so the CI's day-index (packs[day % len]) never shifts, but they're
+// never booted by CI nor offered to users. Un-park by deleting the line.
+var disabledPacks = []disabledPack{
+	{config.LoaderFabric, "ardacraft"}, // ardasettings preLaunch crash on 1.20.1 (seen 2026-08-14)
+}
+
+// isDisabled reports whether a pack is parked out of rotation for a loader. The
+// list is tiny, so a linear scan is plenty.
+func isDisabled(loader, slug string) bool {
+	for _, d := range disabledPacks {
+		if d.loader == loader && d.slug == slug {
+			return true
+		}
+	}
+	return false
 }
 
 // AllFeatured returns every curated pack across loaders in a fixed order
 // (NeoForge, then Forge, then Fabric — Quilt shares Fabric's list, so it isn't
-// repeated). The order is stable so indexing into it by day is reproducible.
+// repeated). The order is stable so indexing into it by day is reproducible, and
+// parked packs stay in place (tagged Disabled) so removing one can't reshuffle it.
 func AllFeatured() []Pack {
 	var packs []Pack
 	for _, loaderName := range []string{config.LoaderNeoForge, config.LoaderForge, config.LoaderFabric} {
 		for _, p := range featured(loaderName) {
-			packs = append(packs, Pack{Slug: p.slug, Loader: loaderName, Title: p.title})
+			packs = append(packs, Pack{
+				Slug:     p.slug,
+				Loader:   loaderName,
+				Title:    p.title,
+				Disabled: isDisabled(loaderName, p.slug),
+			})
 		}
 	}
 	return packs
@@ -146,6 +176,9 @@ func SupportsModpacks(loader string) bool {
 func Modpacks(ctx context.Context, c modrinth.Client, loader, mc string) ([]ModpackOffer, error) {
 	offers := make([]ModpackOffer, 0)
 	for _, p := range featured(loader) {
+		if isDisabled(loader, p.slug) {
+			continue
+		}
 		if HasBuild(ctx, c, p.slug, loader, mc) {
 			offers = append(offers, ModpackOffer{Slug: p.slug, Title: p.title})
 		}

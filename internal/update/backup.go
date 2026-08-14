@@ -43,9 +43,7 @@ func zipTree(src, prefix, dest string) error {
 	defer out.Close()
 
 	zw := zip.NewWriter(out)
-	defer zw.Close()
-
-	return filepath.Walk(src, func(path string, info os.FileInfo, err error) error {
+	err = filepath.Walk(src, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			return err
 		}
@@ -68,6 +66,16 @@ func zipTree(src, prefix, dest string) error {
 		_, err = io.Copy(w, f)
 		return err
 	})
+	if err != nil {
+		zw.Close()
+		return err
+	}
+	// Closing flushes the zip's central directory; a failure means a truncated
+	// archive, so surface it instead of reporting a good backup.
+	if err := zw.Close(); err != nil {
+		return fmt.Errorf("finalize %s: %w", dest, err)
+	}
+	return nil
 }
 
 // removeBackup deletes a backup after a successful update.

@@ -80,6 +80,45 @@ func TestModpacksVanillaEmpty(t *testing.T) {
 	}
 }
 
+func TestModpacksSkipsDisabled(t *testing.T) {
+	if len(disabledPacks) == 0 {
+		t.Skip("no parked packs to exercise")
+	}
+	d := disabledPacks[0]
+
+	// Give the parked slug a build; it must still be excluded from the offers.
+	c := fakeClient{withBuild: map[string]bool{d.slug: true}}
+	offers, err := Modpacks(context.Background(), c, d.loader, "1.20.1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, o := range offers {
+		if o.Slug == d.slug {
+			t.Fatalf("parked pack %q should not be offered", d.slug)
+		}
+	}
+}
+
+func TestAllFeaturedKeepsDisabledInPlace(t *testing.T) {
+	if len(disabledPacks) == 0 {
+		t.Skip("no parked packs to exercise")
+	}
+	d := disabledPacks[0]
+
+	var found bool
+	for _, p := range AllFeatured() {
+		if p.Loader == d.loader && p.Slug == d.slug {
+			found = true
+			if !p.Disabled {
+				t.Errorf("parked pack %q should be marked Disabled in AllFeatured", d.slug)
+			}
+		}
+	}
+	if !found {
+		t.Fatalf("parked pack %q must stay in AllFeatured to keep the day-index stable", d.slug)
+	}
+}
+
 func TestModpacksSkipsDelistedSlug(t *testing.T) {
 	// No slug has a build → all skipped, no error (resilient to delisted packs).
 	offers, err := Modpacks(context.Background(), fakeClient{}, config.LoaderFabric, "1.21.8")

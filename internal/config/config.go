@@ -213,7 +213,7 @@ func validateLoaderSplit(loader, version string) error {
 	switch loader {
 	case LoaderForge:
 		if mcver.AtLeast(v, split) {
-			return fmt.Errorf("Forge stops at Minecraft %s; use NeoForge for %s", ForgeNeoSplit, version)
+			return fmt.Errorf("no Forge for Minecraft %s or newer; use NeoForge for %s", ForgeNeoSplit, version)
 		}
 	case LoaderNeoForge:
 		if !mcver.AtLeast(v, split) {

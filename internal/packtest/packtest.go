@@ -52,6 +52,12 @@ func SelectMatrix(ctx context.Context, client modrinth.Client, day int) (Matrix,
 		return Matrix{}, fmt.Errorf("no curated packs")
 	}
 	pack := selectPack(packs, day)
+	if pack.Disabled {
+		// A parked pack holds its slot to keep the day-index stable but boots
+		// nothing; an empty matrix trips the workflow's count==0 guard, which
+		// skips the boot job for the day.
+		return Matrix{Loader: pack.Loader, Slug: pack.Slug, Entries: []Version{}}, nil
+	}
 
 	versions, err := loader.SupportedVersions(ctx, pack.Loader)
 	if err != nil {

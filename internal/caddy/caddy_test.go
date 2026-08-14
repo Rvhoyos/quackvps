@@ -37,7 +37,7 @@ func TestWithImportLine(t *testing.T) {
 		globalEnd := strings.Index(got, "}")
 		importIdx := strings.Index(got, importLine)
 		siteIdx := strings.Index(got, "example.com {")
-		if !(globalEnd < importIdx && importIdx < siteIdx) {
+		if globalEnd >= importIdx || importIdx >= siteIdx {
 			t.Errorf("import not placed after global block, before site:\n%s", got)
 		}
 	})

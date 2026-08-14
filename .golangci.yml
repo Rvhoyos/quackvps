@@ -1,0 +1,15 @@
+version: "2"
+
+linters:
+  default: standard
+  exclusions:
+    # Don't flag the conventional "fire and forget" cases: closing a file/reader
+    # in a defer, writing usage text, removing a temp file. See std-error-handling.
+    presets:
+      - std-error-handling
+    rules:
+      # Test setup uses os.MkdirAll / os.WriteFile purely to build fixtures; a
+      # failure there fails the test anyway, so checking the return adds noise.
+      - path: _test\.go
+        linters:
+          - errcheck

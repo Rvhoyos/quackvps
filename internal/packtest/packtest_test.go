@@ -1,6 +1,7 @@
 package packtest
 
 import (
+	"context"
 	"encoding/json"
 	"testing"
 
@@ -47,6 +48,33 @@ func TestAllFeaturedStable(t *testing.T) {
 		if p.Slug == "" || p.Loader == "" {
 			t.Errorf("pack with empty field: %+v", p)
 		}
+	}
+}
+
+func TestSelectMatrixSkipsDisabled(t *testing.T) {
+	packs := catalog.AllFeatured()
+	day := -1
+	for i, p := range packs {
+		if p.Disabled {
+			day = i
+			break
+		}
+	}
+	if day < 0 {
+		t.Skip("no parked packs to exercise")
+	}
+
+	// The disabled branch returns before any client or loader call, so a nil
+	// client is safe — and asserts we never hit the network for a parked pack.
+	m, err := SelectMatrix(context.Background(), nil, day)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(m.Entries) != 0 {
+		t.Errorf("parked pack should yield an empty matrix, got %d entries", len(m.Entries))
+	}
+	if m.Slug != packs[day].Slug {
+		t.Errorf("matrix slug = %q, want %q", m.Slug, packs[day].Slug)
 	}
 }
 

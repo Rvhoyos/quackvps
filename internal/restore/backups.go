@@ -99,5 +99,10 @@ func extractOne(f *zip.File, destDir string) error {
 	if _, err := io.Copy(out, rc); err != nil {
 		return fmt.Errorf("extract %s: %w", f.Name, err)
 	}
+	// A swallowed close error can leave a truncated file written over the world,
+	// so surface it rather than reporting a clean restore.
+	if err := out.Close(); err != nil {
+		return fmt.Errorf("extract %s: %w", f.Name, err)
+	}
 	return nil
 }
