@@ -73,6 +73,8 @@ Run `sudo quackvps` again to add another server. Each one gets its own folder, s
 
 Works on a fresh VPS or one already running servers. New installs go in their own folder, service, and ports without touching what's already there, and update and restore work on any existing server, including ones this tool didn't create: mods are identified by hashing the jars, not from records this tool keeps.
 
+Updating or restoring a server set up by hand keeps its existing heap flags, read in gigabytes (`-Xms2G`, `-Xmx6G`). Write them that way rather than in megabytes (`-Xmx8192M`), which falls back to the default 1G/4G.
+
 ## Requirements
 
 - An Ubuntu/Debian-family VPS, any release. Needs `apt`, `systemd`, and `ufw`.
