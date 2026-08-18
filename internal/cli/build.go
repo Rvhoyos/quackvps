@@ -10,6 +10,7 @@ import (
 	"github.com/rvhoyos/quackvps/internal/catalog"
 	"github.com/rvhoyos/quackvps/internal/config"
 	"github.com/rvhoyos/quackvps/internal/loader"
+	"github.com/rvhoyos/quackvps/internal/minecraft"
 	"github.com/rvhoyos/quackvps/internal/modrinth"
 	"github.com/rvhoyos/quackvps/internal/restore"
 	"github.com/rvhoyos/quackvps/internal/system"
@@ -22,7 +23,7 @@ import (
 // It's the flag-mode counterpart to prompt.Run: on return cfg is ready for the
 // offline config.Validate, then the online VerifyBuildable. Any problem is a clear
 // error and a non-zero exit, a scripted run never falls back to a prompt.
-func Configure(cfg *config.Config, opts Options) error {
+func Configure(ctx context.Context, cfg *config.Config, opts Options) error {
 	switch opts.Mode {
 	case "install":
 		cfg.Mode = config.ModeInstall
@@ -42,9 +43,9 @@ func Configure(cfg *config.Config, opts Options) error {
 	case config.ModeInstall:
 		return configureInstall(cfg, opts)
 	case config.ModeUpdate:
-		return configureUpdate(cfg, opts)
+		return configureUpdate(ctx, cfg, opts)
 	default:
-		return configureRestore(cfg, opts)
+		return configureRestore(ctx, cfg, opts)
 	}
 }
 
@@ -138,8 +139,8 @@ func configureInstall(cfg *config.Config, opts Options) error {
 	return nil
 }
 
-func configureUpdate(cfg *config.Config, opts Options) error {
-	if err := requireManagedServer(cfg); err != nil {
+func configureUpdate(ctx context.Context, cfg *config.Config, opts Options) error {
+	if err := resolveUnit(ctx, cfg, opts); err != nil {
 		return err
 	}
 	// The loader is fixed by what's on disk, never a flag, mods are loader-specific
@@ -153,8 +154,8 @@ func configureUpdate(cfg *config.Config, opts Options) error {
 	return nil
 }
 
-func configureRestore(cfg *config.Config, opts Options) error {
-	if err := requireManagedServer(cfg); err != nil {
+func configureRestore(ctx context.Context, cfg *config.Config, opts Options) error {
+	if err := resolveUnit(ctx, cfg, opts); err != nil {
 		return err
 	}
 	backups, err := restore.ListBackups(cfg.Dir)
@@ -172,14 +173,42 @@ func configureRestore(cfg *config.Config, opts Options) error {
 	return nil
 }
 
-// requireManagedServer rejects update/restore against anything that isn't a real
-// quackvps server: a directory without our systemd unit is a half-built orphan we
-// can't stop, start, or manage.
-func requireManagedServer(cfg *config.Config) error {
-	if !system.UnitExists("mc-" + cfg.Instance + ".service") {
-		return fmt.Errorf("no managed server at %s: systemd unit mc-%s.service is missing", cfg.Dir, cfg.Instance)
+// resolveUnit records the service update and restore will stop and start: --unit
+// when given, otherwise our own mc-<instance>.service. A scripted run never
+// guesses and never prompts, so when neither exists it fails, naming the services
+// that do point at this folder.
+func resolveUnit(ctx context.Context, cfg *config.Config, opts Options) error {
+	if opts.Unit != "" {
+		if !system.UnitExists(opts.Unit) {
+			return fmt.Errorf("systemd knows no service %q", opts.Unit)
+		}
+		cfg.Unit = opts.Unit
+		return nil
 	}
+
+	name, services, err := system.ResolveUnit(ctx, minecraft.UnitName(cfg.Instance)+".service")
+	if err != nil {
+		return err
+	}
+	if name == "" {
+		return fmt.Errorf("no service manages %s: pass --unit with the one that runs it%s", cfg.Dir, unitHint(services, cfg.Dir))
+	}
+	cfg.Unit = name
 	return nil
+}
+
+// unitHint names the services that already point at the instance, so the error
+// says what to pass instead of leaving the user to hunt.
+func unitHint(services []system.Unit, dir string) string {
+	matches := system.UnitsForInstance(services, dir)
+	if len(matches) == 0 {
+		return " (the interactive wizard can also create one for a server that has none)"
+	}
+	names := make([]string, len(matches))
+	for i, u := range matches {
+		names[i] = u.Name
+	}
+	return ", e.g. " + strings.Join(names, ", ")
 }
 
 // resolveBackup matches the --backup value against the instance's backups by full

@@ -331,16 +331,6 @@ func writeWebConfigs(cfg *config.Config) error {
 	return nil
 }
 
-// installService writes the systemd unit and reloads the daemon so the unit is
-// known. The unit is enabled and started later, after ownership is fixed.
-func installService(ctx context.Context, cfg *config.Config) error {
-	unit := minecraft.UnitName(cfg.Instance) + ".service"
-	if err := system.WriteUnit(unit, minecraft.UnitFile(cfg)); err != nil {
-		return err
-	}
-	return system.DaemonReload(ctx)
-}
-
 // configureCaddy installs Caddy if needed, writes this instance's site file,
 // ensures the import line, warns on bad DNS, and reloads with rollback.
 func configureCaddy(ctx context.Context, cfg *config.Config) error {

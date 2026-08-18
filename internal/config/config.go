@@ -108,6 +108,16 @@ type Config struct {
 
 	Backup string // chosen backup zip to restore (restore mode)
 
+	// Unit is the systemd service that manages this instance, resolved before an
+	// update or a restore. It defaults to our own mc-<instance>.service, but a
+	// server we didn't install is managed by a unit of the user's own naming, so
+	// it's carried here rather than derived from Instance.
+	Unit string
+
+	// AdoptUnit means Unit doesn't exist yet: the instance has no service at all
+	// and the user asked us to create one before managing it.
+	AdoptUnit bool
+
 	ServerPort int      // MC game port (UFW TCP)
 	Modpack    string   // Modrinth slug, or "" for none
 	Mods       []string // extra mod slugs, e.g. quackedsmp
@@ -180,6 +190,9 @@ func (c *Config) Validate() error {
 
 	switch c.Mode {
 	case ModeRestore:
+		if err := c.validateManagingUnit(); err != nil {
+			return err
+		}
 		return c.validateRestore()
 	case ModeInstall:
 		if err := c.validateLoaderAndVersion(); err != nil {
@@ -187,8 +200,21 @@ func (c *Config) Validate() error {
 		}
 		return c.validateInstall()
 	default: // ModeUpdate
+		if err := c.validateManagingUnit(); err != nil {
+			return err
+		}
 		return c.validateLoaderAndVersion()
 	}
+}
+
+// validateManagingUnit guards the modes that stop and start a server. Without a
+// unit there's nothing to manage, and guessing one would mean acting on a service
+// the user never pointed us at.
+func (c *Config) validateManagingUnit() error {
+	if c.Unit == "" {
+		return fmt.Errorf("no systemd unit set for %s: %s needs the service that manages it", c.Dir, c.Mode)
+	}
+	return nil
 }
 
 func (c *Config) validateLoaderAndVersion() error {

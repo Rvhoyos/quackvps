@@ -1,8 +1,10 @@
 package update
 
 import (
+	"archive/zip"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -36,6 +38,30 @@ func TestReadHeap(t *testing.T) {
 			t.Errorf("readHeap = %d,%d want %d,%d", min, max, defaultMinGB, defaultMaxGB)
 		}
 	})
+}
+
+func TestBackupWorldRenamedLevel(t *testing.T) {
+	dir := t.TempDir()
+	// server.properties points the level somewhere other than world/, which is all
+	// a server needs to have no world/ folder at all.
+	os.WriteFile(filepath.Join(dir, "server.properties"), []byte("level-name=myworld\nserver-port=25565\n"), 0o644)
+	os.MkdirAll(filepath.Join(dir, "myworld", "region"), 0o755)
+	os.WriteFile(filepath.Join(dir, "myworld", "level.dat"), []byte("data"), 0o644)
+
+	path, err := BackupWorld(dir)
+	if err != nil {
+		t.Fatalf("renamed level should still back up: %v", err)
+	}
+	zr, err := zip.OpenReader(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer zr.Close()
+	for _, f := range zr.File {
+		if !strings.HasPrefix(f.Name, "myworld/") {
+			t.Errorf("archived %q, want everything under myworld/", f.Name)
+		}
+	}
 }
 
 func TestBackupWorld(t *testing.T) {

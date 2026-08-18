@@ -71,7 +71,7 @@ func run() error {
 	// Two ways to fill the Config: the flag layer (prompt-free, for scripts) or the
 	// interactive wizard. Both only produce a Config; execution is identical.
 	if nonInteractive {
-		if err := cli.Configure(cfg, opts); err != nil {
+		if err := cli.Configure(ctx, cfg, opts); err != nil {
 			return err
 		}
 	} else {

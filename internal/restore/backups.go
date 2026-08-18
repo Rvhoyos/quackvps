@@ -60,6 +60,35 @@ func backupTime(path string) time.Time {
 
 // extractZip unpacks a backup zip into destDir. A QuackedSMP backup's root is
 // world/ itself, so extracting into the instance dir recreates <destDir>/world/.
+// zipRootDir reports the single top-level folder a backup holds, which names the
+// world it restores: our own backups and QuackedSMP's are both a zip of one world
+// folder, but that folder is called whatever level-name said when it was written.
+// The caller moves that same folder aside, so the two always pair up.
+func zipRootDir(src string) (string, error) {
+	zr, err := zip.OpenReader(src)
+	if err != nil {
+		return "", fmt.Errorf("open backup %s: %w", src, err)
+	}
+	defer zr.Close()
+
+	root := ""
+	for _, f := range zr.File {
+		top, _, nested := strings.Cut(filepath.ToSlash(f.Name), "/")
+		if !nested || top == "" {
+			return "", fmt.Errorf("backup %s has %q at its root; it should hold one world folder", filepath.Base(src), f.Name)
+		}
+		if root == "" {
+			root = top
+		} else if top != root {
+			return "", fmt.Errorf("backup %s holds more than one folder (%s, %s); it should hold one world folder", filepath.Base(src), root, top)
+		}
+	}
+	if root == "" {
+		return "", fmt.Errorf("backup %s is empty", filepath.Base(src))
+	}
+	return root, nil
+}
+
 func extractZip(src, destDir string) error {
 	zr, err := zip.OpenReader(src)
 	if err != nil {

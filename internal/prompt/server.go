@@ -8,6 +8,7 @@ import (
 	"github.com/charmbracelet/huh"
 
 	"github.com/rvhoyos/quackvps/internal/config"
+	"github.com/rvhoyos/quackvps/internal/minecraft"
 	"github.com/rvhoyos/quackvps/internal/picker"
 	"github.com/rvhoyos/quackvps/internal/restore"
 	"github.com/rvhoyos/quackvps/internal/system"
@@ -31,7 +32,7 @@ func askServer(ctx context.Context, cfg *config.Config, pickerStart string) erro
 	cfg.ResolveDir()
 
 	if system.InstanceExists(parent, name) {
-		return resolveExisting(cfg)
+		return resolveExisting(ctx, cfg)
 	}
 	cfg.Mode = config.ModeInstall
 	return nil
@@ -64,7 +65,7 @@ func askInstanceName(parent string) (string, error) {
 // resolveExisting handles the branch when the folder already holds a server:
 // update it in place, restore a world backup, or cancel so the user can pick a
 // different name. Never clobbers.
-func resolveExisting(cfg *config.Config) error {
+func resolveExisting(ctx context.Context, cfg *config.Config) error {
 	choice := "update"
 	field := huh.NewSelect[string]().
 		Title(fmt.Sprintf("%s already has a server. What now?", cfg.Dir)).
@@ -86,7 +87,135 @@ func resolveExisting(cfg *config.Config) error {
 	default:
 		cfg.Mode = config.ModeUpdate
 	}
-	return nil
+	// Both modes stop and start the server, so they need the service that manages
+	// it before anything else is asked.
+	return resolveUnit(ctx, cfg)
+}
+
+// Answers the service prompts return alongside real unit names: create one for
+// this instance, or show every service on the box.
+const (
+	createUnit  = "\x00create-unit"
+	browseUnits = "\x00browse-units"
+)
+
+// resolveUnit records which systemd service manages this instance. Servers we
+// installed have mc-<instance>.service and are taken as-is; a server set up by
+// hand is managed by a unit only its owner can identify, so we ask.
+func resolveUnit(ctx context.Context, cfg *config.Config) error {
+	name, services, err := system.ResolveUnit(ctx, minecraft.UnitName(cfg.Instance)+".service")
+	if err != nil {
+		return err
+	}
+	if name != "" {
+		cfg.Unit = name
+		return nil
+	}
+	return askUnit(cfg, services)
+}
+
+// askUnit settles which service manages this server. It offers the short answer
+// first, the services that point at this folder plus "create one", because that
+// covers nearly every server; the box's full service list is one step further in,
+// for a unit that names neither its folder nor this instance. Picking an unrelated
+// service is the one dangerous answer here, so that path is confirmed separately.
+func askUnit(cfg *config.Config, services []system.Unit) error {
+	matches := system.UnitsForInstance(services, cfg.Dir)
+	for {
+		choice, err := askManagingService(cfg.Dir, matches)
+		if err != nil {
+			return err
+		}
+
+		if choice == browseUnits {
+			choice, err = askAnyService(cfg.Dir, services)
+			if err != nil {
+				return err
+			}
+			if choice != createUnit {
+				ok, err := confirmService(cfg.Dir, choice)
+				if err != nil {
+					return err
+				}
+				if !ok {
+					continue // back to the short list
+				}
+			}
+		}
+
+		if choice == createUnit {
+			cfg.Unit = minecraft.UnitName(cfg.Instance) + ".service"
+			cfg.AdoptUnit = true
+			return nil
+		}
+		cfg.Unit = choice
+		return nil
+	}
+}
+
+// askManagingService is the first screen: the services that already point at this
+// folder, creating one, and the way out to the full list. A server nobody set up
+// as a service is the common case, so creating one leads when nothing matches.
+func askManagingService(dir string, matches []system.Unit) (string, error) {
+	options := make([]huh.Option[string], 0, len(matches)+2)
+	for _, u := range matches {
+		options = append(options, huh.NewOption(u.Name+" (runs in "+dir+")", u.Name))
+	}
+	options = append(options,
+		huh.NewOption("Create a service for this server", createUnit),
+		huh.NewOption("Let me pick from every service on this box", browseUnits),
+	)
+
+	choice := options[0].Value
+	field := huh.NewSelect[string]().
+		Title(fmt.Sprintf("How should we manage the server in %s?", dir)).
+		Description(managingDescription(matches)).
+		Options(options...).
+		Value(&choice)
+	return choice, field.Run()
+}
+
+func managingDescription(matches []system.Unit) string {
+	const why = "We stop and start the server through systemd, so we need to know its service. Creating one is safe on a server that has none: it runs the same run.sh, as the same user, and starts again after a reboot."
+	if len(matches) == 0 {
+		return "No service on this box names this folder, which usually means the server has none. It can also mean its service starts the server some other way, in which case the last option lets you find it by name. " + why
+	}
+	return "The service listed first runs out of this folder, so it's almost certainly the one. If your server is run by a service that names the folder nowhere, the last option lists them all. " + why
+}
+
+// askAnyService lists every service on the box, for the server whose unit names
+// neither its folder nor anything we can match on.
+func askAnyService(dir string, services []system.Unit) (string, error) {
+	options := make([]huh.Option[string], 0, len(services)+1)
+	options = append(options, huh.NewOption("Go back and create a service for this server instead", createUnit))
+	for _, u := range services {
+		options = append(options, huh.NewOption(u.Name, u.Name))
+	}
+
+	choice := options[0].Value
+	field := huh.NewSelect[string]().
+		Title(fmt.Sprintf("Which service runs the server in %s?", dir)).
+		Description("Every service on this box, including ones that have nothing to do with Minecraft. Pick only the one you set up to run this server.").
+		Options(options...).
+		Value(&choice)
+	return choice, field.Run()
+}
+
+// confirmService gates a service picked off the full list, since nothing about it
+// says it belongs to this server. Choosing wrong stops whatever else that service
+// does on this box, so the answer defaults to no.
+func confirmService(dir, name string) (bool, error) {
+	answer := false
+	field := huh.NewConfirm().
+		Title(fmt.Sprintf("Stop and start %s for this server?", name)).
+		Description(fmt.Sprintf("Nothing about %s points at %s, so we can't tell it's the right one. If it isn't, we'll shut down whatever it actually runs on this box, and this server stays running while we work on its files. Only say yes if you set it up to run this server.", name, dir)).
+		Affirmative("Yes, that's the one").
+		Negative("No, go back").
+		Value(&answer)
+	if err := field.Run(); err != nil {
+		return false, err
+	}
+	return answer, nil
 }
 
 // askBackup lists the instance's world backups and lets the user pick one to

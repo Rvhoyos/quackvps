@@ -27,10 +27,27 @@ type ConfirmFunc func(question string) (bool, error)
 // Run performs the in-place update described by cfg (already validated). client
 // resolves the new mod builds; confirm gates the mods/ wipe.
 func Run(ctx context.Context, cfg *config.Config, client modrinth.Client, confirm ConfirmFunc) error {
-	unit := minecraft.UnitName(cfg.Instance)
+	if cfg.AdoptUnit {
+		ui.Step("Creating a service for this server")
+		if err := minecraft.Adopt(ctx, cfg.Instance, cfg.Dir); err != nil {
+			return err
+		}
+		ui.Success("%s now manages %s.", cfg.Unit, cfg.Dir)
+	}
+
+	unit, err := system.ShowUnit(ctx, cfg.Unit)
+	if err != nil {
+		return err
+	}
+	// Ownership comes from the server itself, not from whoever invoked us: an
+	// instance we didn't install may well run as its own account.
+	owner, err := system.InstanceOwner(unit, cfg.Dir)
+	if err != nil {
+		return err
+	}
 
 	ui.Step("Stopping the server")
-	if err := system.StopAndWait(ctx, unit, cfg.RunAsUser, cfg.Instance, system.DefaultStopWait); err != nil {
+	if err := system.StopAndWait(ctx, unit.Name, owner, system.ScreenSession(unit.ExecStart), system.DefaultStopWait); err != nil {
 		return err
 	}
 
@@ -64,12 +81,12 @@ func Run(ctx context.Context, cfg *config.Config, client modrinth.Client, confir
 	}
 
 	ui.Step("Upgrading the server")
-	if err := upgrade(ctx, cfg, resolved); err != nil {
+	if err := upgrade(ctx, cfg, resolved, owner); err != nil {
 		return keepBackup(backup, err)
 	}
 
 	ui.Step("Starting the server")
-	if err := system.StartAndVerify(ctx, unit); err != nil {
+	if err := system.StartAndVerify(ctx, unit.Name); err != nil {
 		return keepBackup(backup, err)
 	}
 
@@ -83,8 +100,9 @@ func Run(ctx context.Context, cfg *config.Config, client modrinth.Client, confir
 }
 
 // upgrade wipes mods/, reinstalls the loader for the new version, regenerates
-// run.sh (preserving the existing RAM), and re-downloads the resolved mods.
-func upgrade(ctx context.Context, cfg *config.Config, resolved map[string]modrinth.Version) error {
+// run.sh (preserving the existing RAM), re-downloads the resolved mods, and hands
+// the instance back to owner, the account the server runs as.
+func upgrade(ctx context.Context, cfg *config.Config, resolved map[string]modrinth.Version, owner string) error {
 	minGB, maxGB := readHeap(cfg.Dir)
 
 	javaPath, err := ensureJava(ctx, cfg)
@@ -125,7 +143,7 @@ func upgrade(ctx context.Context, cfg *config.Config, resolved map[string]modrin
 			return err
 		}
 	}
-	return system.ChownRecursive(cfg.Dir, cfg.RunAsUser)
+	return system.ChownRecursive(cfg.Dir, owner)
 }
 
 func ensureJava(ctx context.Context, cfg *config.Config) (string, error) {

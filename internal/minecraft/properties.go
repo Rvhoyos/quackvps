@@ -8,9 +8,23 @@ package minecraft
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 	"sort"
 	"strings"
 )
+
+// LevelName returns the folder an instance keeps its world in. server.properties'
+// level-name sets it and defaults to "world", so most servers have world/, but the
+// name is free: with level-name=myworld the server generates myworld/ and no
+// world/ at all (verified against a real server), which is why backups and
+// restores read it instead of assuming.
+func LevelName(dir string) string {
+	props, err := ReadProps(filepath.Join(dir, "server.properties"))
+	if err != nil || props["level-name"] == "" {
+		return "world"
+	}
+	return props["level-name"]
+}
 
 // ReadProps parses a Java .properties file (key=value, # comments) into a map.
 // A missing file yields an empty map, not an error, so callers can read-modify-

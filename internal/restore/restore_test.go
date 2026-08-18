@@ -56,6 +56,35 @@ func TestListBackupsMissingDir(t *testing.T) {
 	}
 }
 
+func TestZipRootDir(t *testing.T) {
+	dir := t.TempDir()
+
+	renamed := filepath.Join(dir, "world-20260610-161024.zip")
+	writeWorldZip(t, renamed, map[string]string{
+		"myworld/level.dat":        "leveldata",
+		"myworld/region/r.0.0.mca": "chunk",
+	})
+	root, err := zipRootDir(renamed)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if root != "myworld" {
+		t.Errorf("root = %q, want myworld", root)
+	}
+
+	loose := filepath.Join(dir, "loose.zip")
+	writeWorldZip(t, loose, map[string]string{"level.dat": "leveldata"})
+	if _, err := zipRootDir(loose); err == nil {
+		t.Error("a backup with files at its root should be rejected")
+	}
+
+	two := filepath.Join(dir, "two.zip")
+	writeWorldZip(t, two, map[string]string{"world/level.dat": "a", "nether/level.dat": "b"})
+	if _, err := zipRootDir(two); err == nil {
+		t.Error("a backup with two folders should be rejected")
+	}
+}
+
 func TestExtractZip(t *testing.T) {
 	src := filepath.Join(t.TempDir(), "world-20260610-161024.zip")
 	writeWorldZip(t, src, map[string]string{

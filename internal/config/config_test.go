@@ -95,6 +95,7 @@ func TestValidateRestore(t *testing.T) {
 		c.Instance = "survival"
 		c.ResolveDir()
 		c.RunAsUser = "ubuntu"
+		c.Unit = "mc-survival.service"
 		c.Backup = "/home/ubuntu/mcserver/survival/backups/world-20260610-161024.zip"
 		return c
 	}
@@ -107,6 +108,12 @@ func TestValidateRestore(t *testing.T) {
 	c.Backup = ""
 	if err := c.Validate(); err == nil {
 		t.Error("expected error when no backup is selected")
+	}
+
+	c = base()
+	c.Unit = ""
+	if err := c.Validate(); err == nil {
+		t.Error("expected error when no managing unit is set")
 	}
 }
 

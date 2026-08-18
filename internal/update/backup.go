@@ -8,16 +8,19 @@ import (
 	"path/filepath"
 	"time"
 
+	"github.com/rvhoyos/quackvps/internal/minecraft"
 	"github.com/rvhoyos/quackvps/internal/ui"
 )
 
-// BackupWorld zips the instance's world/ into backups/world-<timestamp>.zip. The
-// filename matches QuackedSMP's own backup format, so a kept backup can also be
-// targeted by the (future) restore feature. Returns the backup path.
+// BackupWorld zips the instance's world folder into backups/world-<timestamp>.zip.
+// The filename matches QuackedSMP's own backup format, so a kept backup can also
+// be targeted by the restore flow. The folder itself is whatever level-name says,
+// since a server we didn't install may not call it world. Returns the backup path.
 func BackupWorld(dir string) (string, error) {
-	world := filepath.Join(dir, "world")
+	level := minecraft.LevelName(dir)
+	world := filepath.Join(dir, level)
 	if _, err := os.Stat(world); err != nil {
-		return "", fmt.Errorf("no world/ to back up in %s: %w", dir, err)
+		return "", fmt.Errorf("no %s/ to back up in %s: %w", level, dir, err)
 	}
 
 	backupDir := filepath.Join(dir, "backups")
@@ -27,7 +30,7 @@ func BackupWorld(dir string) (string, error) {
 	stamp := time.Now().Format("20060102-150405")
 	dest := filepath.Join(backupDir, "world-"+stamp+".zip")
 
-	if err := zipTree(world, "world", dest); err != nil {
+	if err := zipTree(world, level, dest); err != nil {
 		return "", err
 	}
 	return dest, nil

@@ -60,6 +60,10 @@ type Options struct {
 	// Update field.
 	EmptyMods bool
 
+	// Unit names the systemd service that manages an existing server, for update
+	// and restore on a server we didn't install.
+	Unit string
+
 	// Restore field.
 	Backup string
 }
@@ -113,6 +117,7 @@ func Parse(args []string, out io.Writer) (opts Options, handled bool, err error)
 	fs.StringVar(&o.SSHPubKey, "ssh-pubkey", "", "install: public key to authorize before hardening")
 
 	fs.BoolVar(&o.EmptyMods, "empty-mods", false, "update: empty the mods folder instead of upgrading it")
+	fs.StringVar(&o.Unit, "unit", "", "update/restore: systemd service that manages the server (default mc-<instance>.service)")
 	fs.StringVar(&o.Backup, "backup", "", "restore: backup zip to restore (path or filename)")
 
 	if err := fs.Parse(args); err != nil {

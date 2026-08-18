@@ -21,14 +21,40 @@ import (
 
 // Run restores cfg.Backup into cfg.Dir (both already validated).
 func Run(ctx context.Context, cfg *config.Config) error {
-	unit := minecraft.UnitName(cfg.Instance)
+	if cfg.AdoptUnit {
+		// Restore only swaps the world; it never writes a launch script, so a server
+		// without one has nothing for the new service to start.
+		if !minecraft.HasRunScript(cfg.Dir) {
+			return fmt.Errorf("%s has no run.sh, so there's nothing for a service to start: update this server first, then restore", cfg.Dir)
+		}
+		ui.Step("Creating a service for this server")
+		if err := minecraft.Adopt(ctx, cfg.Instance, cfg.Dir); err != nil {
+			return err
+		}
+		ui.Success("%s now manages %s.", cfg.Unit, cfg.Dir)
+	}
 
-	ui.Step("Stopping the server")
-	if err := system.StopAndWait(ctx, unit, cfg.RunAsUser, cfg.Instance, system.DefaultStopWait); err != nil {
+	unit, err := system.ShowUnit(ctx, cfg.Unit)
+	if err != nil {
+		return err
+	}
+	owner, err := system.InstanceOwner(unit, cfg.Dir)
+	if err != nil {
 		return err
 	}
 
-	world := filepath.Join(cfg.Dir, "world")
+	ui.Step("Stopping the server")
+	if err := system.StopAndWait(ctx, unit.Name, owner, system.ScreenSession(unit.ExecStart), system.DefaultStopWait); err != nil {
+		return err
+	}
+
+	// The backup names the world it restores, so the folder we move out of its way
+	// is that same one, whatever this server calls its level.
+	level, err := zipRootDir(cfg.Backup)
+	if err != nil {
+		return err
+	}
+	world := filepath.Join(cfg.Dir, level)
 	aside, err := moveAside(world)
 	if err != nil {
 		return err
@@ -41,12 +67,12 @@ func Run(ctx context.Context, cfg *config.Config) error {
 	if err := extractZip(cfg.Backup, cfg.Dir); err != nil {
 		return restoreAside(world, aside, cfg.Backup, err)
 	}
-	if err := system.ChownRecursive(cfg.Dir, cfg.RunAsUser); err != nil {
+	if err := system.ChownRecursive(cfg.Dir, owner); err != nil {
 		return restoreAside(world, aside, cfg.Backup, err)
 	}
 
 	ui.Step("Starting the server")
-	if err := system.StartAndVerify(ctx, unit); err != nil {
+	if err := system.StartAndVerify(ctx, unit.Name); err != nil {
 		return restoreAside(world, aside, cfg.Backup, err)
 	}
 

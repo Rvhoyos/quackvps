@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"context"
 	"testing"
 
 	"github.com/rvhoyos/quackvps/internal/config"
@@ -78,7 +79,7 @@ func TestConfigureInstallMapping(t *testing.T) {
 	}
 	cfg := config.New()
 	cfg.RunAsUser, cfg.RunAsHome = "ubuntu", "/home/ubuntu"
-	if err := Configure(cfg, opts); err != nil {
+	if err := Configure(context.Background(), cfg, opts); err != nil {
 		t.Fatalf("configure: %v", err)
 	}
 
@@ -116,7 +117,7 @@ func TestConfigureHardenSSHNeedsKey(t *testing.T) {
 		Instance:  "survival",
 		HardenSSH: true, // no --ssh-pubkey
 	}
-	if err := Configure(config.New(), opts); err == nil {
+	if err := Configure(context.Background(), config.New(), opts); err == nil {
 		t.Fatal("harden without a pubkey should be rejected")
 	}
 }

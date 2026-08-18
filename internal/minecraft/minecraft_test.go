@@ -1,11 +1,10 @@
 package minecraft
 
 import (
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
-
-	"github.com/rvhoyos/quackvps/internal/config"
 )
 
 func TestPropsRoundTrip(t *testing.T) {
@@ -45,12 +44,7 @@ func TestReadPropsMissingFile(t *testing.T) {
 }
 
 func TestUnitFile(t *testing.T) {
-	cfg := config.New()
-	cfg.Instance = "survival"
-	cfg.RunAsUser = "ubuntu"
-	cfg.Dir = "/home/ubuntu/mcserver/survival"
-
-	unit := UnitFile(cfg)
+	unit := UnitFile("survival", "ubuntu", "/home/ubuntu/mcserver/survival")
 	for _, want := range []string{
 		"Type=forking",
 		"User=ubuntu",
@@ -63,5 +57,17 @@ func TestUnitFile(t *testing.T) {
 		if !strings.Contains(unit, want) {
 			t.Errorf("unit missing %q:\n%s", want, unit)
 		}
+	}
+}
+
+func TestLevelName(t *testing.T) {
+	dir := t.TempDir()
+	if got := LevelName(dir); got != "world" {
+		t.Errorf("no server.properties: got %q, want world", got)
+	}
+
+	os.WriteFile(filepath.Join(dir, "server.properties"), []byte("server-port=25565\nlevel-name=myworld\n"), 0o644)
+	if got := LevelName(dir); got != "myworld" {
+		t.Errorf("got %q, want myworld", got)
 	}
 }

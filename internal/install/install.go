@@ -90,7 +90,8 @@ func Run(ctx context.Context, cfg *config.Config, client modrinth.Client) (err e
 	}
 
 	ui.Step("Creating the service")
-	if err := installService(ctx, cfg); err != nil {
+	// The unit is enabled and started later, after ownership is fixed.
+	if err := minecraft.InstallUnit(ctx, cfg.Instance, cfg.RunAsUser, cfg.Dir); err != nil {
 		return err
 	}
 	wroteUnit = true

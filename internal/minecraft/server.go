@@ -46,11 +46,15 @@ func (e *FirstRunError) Error() string {
 	}
 }
 
+// runScript is the launch script every instance gets, whatever the loader, and
+// the one the systemd unit calls.
+const runScript = "run.sh"
+
 // WriteRunScript writes run.sh (executable) with the given body.
 func WriteRunScript(dir, body string) error {
-	path := filepath.Join(dir, "run.sh")
+	path := filepath.Join(dir, runScript)
 	if err := os.WriteFile(path, []byte(body), 0o755); err != nil {
-		return fmt.Errorf("write run.sh: %w", err)
+		return fmt.Errorf("write %s: %w", runScript, err)
 	}
 	return nil
 }
@@ -63,7 +67,7 @@ func FirstRunGenerate(ctx context.Context, dir string) error {
 	runCtx, cancel := context.WithTimeout(ctx, firstRunTimeout)
 	defer cancel()
 
-	cmd := exec.CommandContext(runCtx, "bash", "run.sh")
+	cmd := exec.CommandContext(runCtx, "bash", runScript)
 	cmd.Dir = dir
 	// A non-zero exit (EULA not accepted) is the expected outcome, so we verify by
 	// the generated file, not the exit code, but we keep the output so a genuine
@@ -146,7 +150,7 @@ func BootUntilReady(ctx context.Context, dir string, timeout time.Duration) erro
 	runCtx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 
-	cmd := exec.CommandContext(runCtx, "bash", "run.sh")
+	cmd := exec.CommandContext(runCtx, "bash", runScript)
 	cmd.Dir = dir
 	if err := cmd.Start(); err != nil {
 		return fmt.Errorf("start server: %w", err)
