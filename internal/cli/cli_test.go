@@ -2,6 +2,7 @@ package cli
 
 import (
 	"context"
+	"io"
 	"testing"
 
 	"github.com/rvhoyos/quackvps/internal/config"
@@ -9,7 +10,7 @@ import (
 )
 
 func TestValidateMode(t *testing.T) {
-	for _, m := range []string{"", "install", "update", "restore"} {
+	for _, m := range []string{"", "install", "update", "restore", "add-mods"} {
 		if err := validateMode(m); err != nil {
 			t.Errorf("mode %q should be accepted: %v", m, err)
 		}
@@ -129,4 +130,59 @@ func hasMod(mods []string, want string) bool {
 		}
 	}
 	return false
+}
+
+func TestSplitSlugs(t *testing.T) {
+	tests := []struct {
+		in   string
+		want []string
+	}{
+		{"", nil},
+		{"simple-voice-chat", []string{"simple-voice-chat"}},
+		{"bluemap,simple-voice-chat", []string{"bluemap", "simple-voice-chat"}},
+		{" bluemap , simple-voice-chat ", []string{"bluemap", "simple-voice-chat"}},
+		{"bluemap,", []string{"bluemap"}}, // trailing comma isn't an error
+		{",,", nil},
+	}
+	for _, tt := range tests {
+		got := splitSlugs(tt.in)
+		if len(got) != len(tt.want) {
+			t.Errorf("splitSlugs(%q) = %v, want %v", tt.in, got, tt.want)
+			continue
+		}
+		for i := range got {
+			if got[i] != tt.want[i] {
+				t.Errorf("splitSlugs(%q) = %v, want %v", tt.in, got, tt.want)
+				break
+			}
+		}
+	}
+}
+
+func TestConfigureAddModsNeedsModsAndVersion(t *testing.T) {
+	tests := []struct {
+		name string
+		opts Options
+	}{
+		{"no mods", Options{Mode: "add-mods", Parent: "/srv/mc", Instance: "survival", MCVersion: "1.21.8"}},
+		{"no version", Options{Mode: "add-mods", Parent: "/srv/mc", Instance: "survival", Mods: []string{"bluemap"}}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Both are caught before anything reads the disk or systemd.
+			if err := Configure(context.Background(), config.New(), tt.opts); err == nil {
+				t.Error("expected an error naming the missing flag")
+			}
+		})
+	}
+}
+
+func TestParseMods(t *testing.T) {
+	opts, handled, err := Parse([]string{"--mode", "add-mods", "--mods", "bluemap,simple-voice-chat"}, io.Discard)
+	if err != nil || handled {
+		t.Fatalf("Parse: err=%v handled=%v", err, handled)
+	}
+	if len(opts.Mods) != 2 || opts.Mods[0] != "bluemap" || opts.Mods[1] != "simple-voice-chat" {
+		t.Errorf("Mods = %v, want [bluemap simple-voice-chat]", opts.Mods)
+	}
 }

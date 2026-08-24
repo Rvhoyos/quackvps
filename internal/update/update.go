@@ -27,27 +27,8 @@ type ConfirmFunc func(question string) (bool, error)
 // Run performs the in-place update described by cfg (already validated). client
 // resolves the new mod builds; confirm gates the mods/ wipe.
 func Run(ctx context.Context, cfg *config.Config, client modrinth.Client, confirm ConfirmFunc) error {
-	if cfg.AdoptUnit {
-		ui.Step("Creating a service for this server")
-		if err := minecraft.Adopt(ctx, cfg.Instance, cfg.Dir); err != nil {
-			return err
-		}
-		ui.Success("%s now manages %s.", cfg.Unit, cfg.Dir)
-	}
-
-	unit, err := system.ShowUnit(ctx, cfg.Unit)
+	unit, owner, err := minecraft.TakeOffline(ctx, cfg)
 	if err != nil {
-		return err
-	}
-	// Ownership comes from the server itself, not from whoever invoked us: an
-	// instance we didn't install may well run as its own account.
-	owner, err := system.InstanceOwner(unit, cfg.Dir)
-	if err != nil {
-		return err
-	}
-
-	ui.Step("Stopping the server")
-	if err := system.StopAndWait(ctx, unit.Name, owner, system.ScreenSession(unit.ExecStart), system.DefaultStopWait); err != nil {
 		return err
 	}
 

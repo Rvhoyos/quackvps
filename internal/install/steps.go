@@ -12,10 +12,10 @@ import (
 	"github.com/rvhoyos/quackvps/internal/caddy"
 	"github.com/rvhoyos/quackvps/internal/catalog"
 	"github.com/rvhoyos/quackvps/internal/config"
-	"github.com/rvhoyos/quackvps/internal/dl"
 	"github.com/rvhoyos/quackvps/internal/loader"
 	"github.com/rvhoyos/quackvps/internal/minecraft"
 	"github.com/rvhoyos/quackvps/internal/modrinth"
+	"github.com/rvhoyos/quackvps/internal/mods"
 	"github.com/rvhoyos/quackvps/internal/system"
 	"github.com/rvhoyos/quackvps/internal/ui"
 	"github.com/rvhoyos/quackvps/internal/web"
@@ -159,93 +159,8 @@ func installContent(ctx context.Context, cfg *config.Config, client modrinth.Cli
 		}
 	}
 
-	// Identify what a modpack already dropped in mods/ so a selected add-on mod
-	// (e.g. Simple Voice Chat) isn't installed a second time at a different
-	// version, which would leave two conflicting jars.
-	installed, err := installedProjects(ctx, client, cfg.Dir)
-	if err != nil {
-		return err
-	}
-	for _, slug := range cfg.Mods {
-		if err := installMod(ctx, cfg, client, slug, installed); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-// installMod downloads a mod's primary file plus its required dependencies into
-// mods/, skipping anything a modpack already provides (tracked by project ID).
-func installMod(ctx context.Context, cfg *config.Config, client modrinth.Client, slug string, installed map[string]bool) error {
-	return ui.Spinner("Installing "+slug, func() error {
-		versions, err := client.Versions(ctx, slug, []string{cfg.Loader}, []string{cfg.MCVersion})
-		if err != nil {
-			return err
-		}
-		if len(versions) == 0 {
-			return fmt.Errorf("%s has no build for %s %s", slug, cfg.Loader, cfg.MCVersion)
-		}
-		return downloadWithDeps(ctx, cfg, client, versions[0], installed)
-	})
-}
-
-// downloadWithDeps downloads v and its required dependencies, skipping any
-// project already present and recording each one so later mods dedup too.
-func downloadWithDeps(ctx context.Context, cfg *config.Config, client modrinth.Client, v modrinth.Version, installed map[string]bool) error {
-	for _, want := range append([]modrinth.Version{v}, resolveDepsBestEffort(ctx, cfg, client, v)...) {
-		if installed[want.ProjectID] {
-			continue
-		}
-		if err := downloadMod(ctx, cfg.Dir, want); err != nil {
-			return err
-		}
-		installed[want.ProjectID] = true
-	}
-	return nil
-}
-
-func resolveDepsBestEffort(ctx context.Context, cfg *config.Config, client modrinth.Client, v modrinth.Version) []modrinth.Version {
-	deps, err := modrinth.ResolveRequired(ctx, client, v, []string{cfg.Loader}, []string{cfg.MCVersion})
-	if err != nil {
-		// Dependency resolution is best-effort; a missing optional dep shouldn't
-		// abort the whole install. The mod's own jar still gets downloaded.
-		ui.Warn("could not resolve dependencies for %s: %v", v.ProjectID, err)
-		return nil
-	}
-	return deps
-}
-
-// installedProjects hashes the jars already in mods/ and asks Modrinth which
-// project each belongs to, so add-on mods can dedup against a modpack's bundle.
-// Best-effort: if identification fails we return an empty set (worst case, a
-// duplicate jar) rather than failing the install.
-func installedProjects(ctx context.Context, client modrinth.Client, dir string) (map[string]bool, error) {
-	jars, err := filepath.Glob(filepath.Join(dir, "mods", "*.jar"))
-	if err != nil {
-		return nil, err
-	}
-	ids := map[string]bool{}
-	if len(jars) == 0 {
-		return ids, nil
-	}
-
-	var hashes []string
-	for _, jar := range jars {
-		sum, err := dl.SHA512File(jar)
-		if err != nil {
-			return nil, err
-		}
-		hashes = append(hashes, sum)
-	}
-	found, err := client.IdentifyByHash(ctx, hashes)
-	if err != nil {
-		ui.Warn("could not identify existing mods for dedup: %v", err)
-		return ids, nil
-	}
-	for _, v := range found {
-		ids[v.ProjectID] = true
-	}
-	return ids, nil
+	_, err := mods.Install(ctx, client, cfg.Dir, cfg.Loader, cfg.MCVersion, cfg.Mods)
+	return err
 }
 
 // configureServer writes run.sh, boots once to generate configs, accepts the

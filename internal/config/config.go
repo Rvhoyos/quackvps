@@ -23,6 +23,7 @@ const (
 	ModeInstall Mode = iota // fresh server into <Parent>/<Instance>
 	ModeUpdate              // upgrade an existing instance in place
 	ModeRestore             // restore a world backup into an existing instance
+	ModeAddMods             // add mods to an existing instance
 )
 
 func (m Mode) String() string {
@@ -33,6 +34,8 @@ func (m Mode) String() string {
 		return "update"
 	case ModeRestore:
 		return "restore"
+	case ModeAddMods:
+		return "add-mods"
 	default:
 		return "unknown"
 	}
@@ -166,12 +169,13 @@ var validLoaders = map[string]bool{
 // single gate: nothing with a side effect should run on a Config that fails it.
 //
 // The checks split by mode. Every flow needs a valid target (parent, instance,
-// dir) and a non-root run-as user. Install and update also need a loader and MC
-// version; restore doesn't touch either (it only swaps the world). Only install
-// configures RAM, ports, features, and the web layer from the wizard, on update
-// those are read from the existing server on disk, so they aren't validated here.
+// dir) and a non-root run-as user. Install, update, and adding mods also need a
+// loader and MC version; restore doesn't touch either (it only swaps the world).
+// Only install configures RAM, ports, features, and the web layer from the
+// wizard, on the modes that work on an existing server those are read from disk,
+// so they aren't validated here.
 func (c *Config) Validate() error {
-	if c.Mode != ModeInstall && c.Mode != ModeUpdate && c.Mode != ModeRestore {
+	if c.Mode != ModeInstall && c.Mode != ModeUpdate && c.Mode != ModeRestore && c.Mode != ModeAddMods {
 		return fmt.Errorf("mode not set")
 	}
 
@@ -199,6 +203,14 @@ func (c *Config) Validate() error {
 			return err
 		}
 		return c.validateInstall()
+	case ModeAddMods:
+		if err := c.validateManagingUnit(); err != nil {
+			return err
+		}
+		if err := c.validateLoaderAndVersion(); err != nil {
+			return err
+		}
+		return c.validateAddMods()
 	default: // ModeUpdate
 		if err := c.validateManagingUnit(); err != nil {
 			return err
@@ -245,6 +257,20 @@ func validateLoaderSplit(loader, version string) error {
 		if !mcver.AtLeast(v, split) {
 			return fmt.Errorf("NeoForge starts at Minecraft %s; use Forge for %s", ForgeNeoSplit, version)
 		}
+	}
+	return nil
+}
+
+// validateAddMods checks what adding mods needs beyond a valid target and
+// version: something to install, and a loader that can load it. A jar dropped
+// into a vanilla server's mods/ is never read, so that pairing is refused rather
+// than downloaded.
+func (c *Config) validateAddMods() error {
+	if len(c.Mods) == 0 {
+		return fmt.Errorf("no mods given to add")
+	}
+	if c.Loader == LoaderVanilla {
+		return fmt.Errorf("%s runs vanilla Minecraft, which has no mod loader: reinstall it with a loader to run mods", c.Dir)
 	}
 	return nil
 }

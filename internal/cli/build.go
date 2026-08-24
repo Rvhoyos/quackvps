@@ -31,6 +31,8 @@ func Configure(ctx context.Context, cfg *config.Config, opts Options) error {
 		cfg.Mode = config.ModeUpdate
 	case "restore":
 		cfg.Mode = config.ModeRestore
+	case "add-mods":
+		cfg.Mode = config.ModeAddMods
 	default:
 		return fmt.Errorf("unknown --mode %q", opts.Mode)
 	}
@@ -44,6 +46,8 @@ func Configure(ctx context.Context, cfg *config.Config, opts Options) error {
 		return configureInstall(cfg, opts)
 	case config.ModeUpdate:
 		return configureUpdate(ctx, cfg, opts)
+	case config.ModeAddMods:
+		return configureAddMods(ctx, cfg, opts)
 	default:
 		return configureRestore(ctx, cfg, opts)
 	}
@@ -145,6 +149,40 @@ func configureUpdate(ctx context.Context, cfg *config.Config, opts Options) erro
 	}
 	// The loader is fixed by what's on disk, never a flag, mods are loader-specific
 	// and the update's hash lookup only returns same-loader builds.
+	return resolveLoaderAndVersion(cfg, opts)
+}
+
+// configureAddMods fills the mods to install into an existing server. The loader
+// and the version describe that server rather than choosing anything, so the
+// loader is read off disk and --mcversion has to be the version it runs: a mod
+// built for another one would be downloaded and never load.
+func configureAddMods(ctx context.Context, cfg *config.Config, opts Options) error {
+	if len(opts.Mods) == 0 {
+		return fmt.Errorf("add-mods needs --mods with at least one Modrinth slug, e.g. --mods simple-voice-chat")
+	}
+	if err := resolveUnit(ctx, cfg, opts); err != nil {
+		return err
+	}
+	if err := resolveLoaderAndVersion(cfg, opts); err != nil {
+		return err
+	}
+	// The server's world data names the version it runs, so --mcversion is only
+	// needed for a server that has never generated a world.
+	if cfg.MCVersion == "" {
+		version, err := minecraft.WorldVersion(cfg.Dir)
+		if err != nil {
+			return fmt.Errorf("add-mods needs --mcversion: couldn't read the version from this server's world data (%w)", err)
+		}
+		cfg.MCVersion = version
+	}
+	cfg.Mods = opts.Mods
+	return nil
+}
+
+// resolveLoaderAndVersion reads the loader from the instance on disk and takes
+// the version from the flags, the pair the modes that work on an existing server
+// share.
+func resolveLoaderAndVersion(cfg *config.Config, opts Options) error {
 	detected, err := loader.Detect(cfg.Dir)
 	if err != nil {
 		return fmt.Errorf("detect loader at %s: %w", cfg.Dir, err)
@@ -233,8 +271,8 @@ func backupNames(backups []restore.Backup) string {
 	return strings.Join(names, ", ")
 }
 
-// VerifyBuildable confirms, over the network, that the requested version (and for
-// an install, the modpack and add-ons) actually have a build for the chosen loader
+// VerifyBuildable confirms, over the network, that the requested version (and any
+// modpack or mods asked for) actually have a build for the chosen loader
 // , the guarantee the wizard gets by only offering real choices. It runs after the
 // offline config.Validate. A fetch failure is a warning, not a hard stop, so a
 // transient network problem doesn't block an otherwise valid run.
@@ -260,7 +298,7 @@ func VerifyBuildable(ctx context.Context, cfg *config.Config, client modrinth.Cl
 	}
 	for _, slug := range cfg.Mods {
 		if !catalog.HasBuild(ctx, client, slug, cfg.Loader, cfg.MCVersion) {
-			return fmt.Errorf("add-on %q has no %s build for Minecraft %s", slug, cfg.Loader, cfg.MCVersion)
+			return fmt.Errorf("mod %q has no %s build for Minecraft %s", slug, cfg.Loader, cfg.MCVersion)
 		}
 	}
 	return nil

@@ -70,7 +70,7 @@ func askHardenSSH(ctx context.Context, cfg *config.Config) error {
 
 // pubKeyHelp walks a user with no key through making one and copying it, since this
 // is the step people trip on. Do it on your OWN machine, not the server.
-const pubKeyHelp = `No key yet? On your own machine, run:  ssh-keygen -t ed25519  (press Enter through the prompts).
+var pubKeyHelp = `No key yet? On your own machine, run:  ssh-keygen -t ed25519  (press Enter through the prompts).
 That makes id_ed25519 (private, keep it, never paste) and id_ed25519.pub (public, the one to copy).
 Copy the public key to your clipboard:
   macOS              pbcopy < ~/.ssh/id_ed25519.pub
@@ -78,7 +78,7 @@ Copy the public key to your clipboard:
   Linux (X11)        xclip -selection clipboard < ~/.ssh/id_ed25519.pub
   Linux (Wayland)    wl-copy < ~/.ssh/id_ed25519.pub
 Or just view it and copy the line:  cat ~/.ssh/id_ed25519.pub
-NEVER paste the private key (the long BEGIN...PRIVATE KEY block).`
+` + ui.Caution("Never paste the private key, the long BEGIN...PRIVATE KEY block. Only the .pub line belongs on a server.")
 
 func askPublicKey(cfg *config.Config) error {
 	var key string

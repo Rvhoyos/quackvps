@@ -12,6 +12,7 @@ import (
 	"github.com/rvhoyos/quackvps/internal/picker"
 	"github.com/rvhoyos/quackvps/internal/restore"
 	"github.com/rvhoyos/quackvps/internal/system"
+	"github.com/rvhoyos/quackvps/internal/ui"
 )
 
 // askServer picks the parent container, then either takes a name for a new server
@@ -63,16 +64,17 @@ func askInstanceName(parent string) (string, error) {
 }
 
 // resolveExisting handles the branch when the folder already holds a server:
-// update it in place, restore a world backup, or cancel so the user can pick a
-// different name. Never clobbers.
+// update it in place, restore a world backup, add mods to it, or cancel so the
+// user can pick a different name. Never clobbers.
 func resolveExisting(ctx context.Context, cfg *config.Config) error {
 	choice := "update"
 	field := huh.NewSelect[string]().
 		Title(fmt.Sprintf("%s already has a server. What now?", cfg.Dir)).
-		Description("Update keeps your world and upgrades the loader/mods. Restore rolls the world back to a saved backup. Cancel lets you re-run and choose a different name; we never overwrite an existing server.").
+		Description("Update keeps your world and upgrades the loader/mods. Restore rolls the world back to a saved backup. Add mods installs more mods into the server you have, world and version untouched. Cancel lets you re-run and choose a different name; we never overwrite an existing server.").
 		Options(
 			huh.NewOption("Update it in place", "update"),
 			huh.NewOption("Restore a world backup", "restore"),
+			huh.NewOption("Add mods to it", "addmods"),
 			huh.NewOption("Cancel", "cancel"),
 		).
 		Value(&choice)
@@ -84,11 +86,13 @@ func resolveExisting(ctx context.Context, cfg *config.Config) error {
 		return fmt.Errorf("cancelled: re-run and choose a different name for a new server")
 	case "restore":
 		cfg.Mode = config.ModeRestore
+	case "addmods":
+		cfg.Mode = config.ModeAddMods
 	default:
 		cfg.Mode = config.ModeUpdate
 	}
-	// Both modes stop and start the server, so they need the service that manages
-	// it before anything else is asked.
+	// Every one of these modes stops and starts the server, so they need the
+	// service that manages it before anything else is asked.
 	return resolveUnit(ctx, cfg)
 }
 
@@ -208,7 +212,8 @@ func confirmService(dir, name string) (bool, error) {
 	answer := false
 	field := huh.NewConfirm().
 		Title(fmt.Sprintf("Stop and start %s for this server?", name)).
-		Description(fmt.Sprintf("Nothing about %s points at %s, so we can't tell it's the right one. If it isn't, we'll shut down whatever it actually runs on this box, and this server stays running while we work on its files. Only say yes if you set it up to run this server.", name, dir)).
+		Description(fmt.Sprintf("Nothing about %s points at %s, so we can't tell it's the right one.\n", name, dir) +
+			ui.Caution("Only say yes if you set this service up to run this server. If it runs something else, we shut that down instead, and this server keeps running while we work on its files.")).
 		Affirmative("Yes, that's the one").
 		Negative("No, go back").
 		Value(&answer)

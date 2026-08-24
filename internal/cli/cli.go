@@ -13,6 +13,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"strings"
 )
 
 // Version is the build's version string, overridable at link time.
@@ -25,7 +26,7 @@ type Options struct {
 	// applies to a wizard run; the non-interactive path uses Parent/Instance.
 	Dir string
 
-	Mode     string // "" (wizard), or install / update / restore
+	Mode     string // "" (wizard), or install / update / restore / add-mods
 	Parent   string
 	Instance string
 
@@ -60,6 +61,9 @@ type Options struct {
 	// Update field.
 	EmptyMods bool
 
+	// Add-mods field: the Modrinth slugs to install into an existing server.
+	Mods []string
+
 	// Unit names the systemd service that manages an existing server, for update
 	// and restore on a server we didn't install.
 	Unit string
@@ -85,7 +89,7 @@ func Parse(args []string, out io.Writer) (opts Options, handled bool, err error)
 	showVersion := fs.Bool("version", false, "print the version and exit")
 	var o Options
 	fs.StringVar(&o.Dir, "dir", "", "parent folder to start the interactive picker in")
-	fs.StringVar(&o.Mode, "mode", "", "non-interactive: install, update, or restore")
+	fs.StringVar(&o.Mode, "mode", "", "non-interactive: install, update, restore, or add-mods")
 	fs.StringVar(&o.Parent, "parent", "", "parent folder that holds servers, e.g. /home/ubuntu/mcserver")
 	fs.StringVar(&o.Instance, "instance", "", "server name (a single folder name under --parent)")
 
@@ -117,7 +121,8 @@ func Parse(args []string, out io.Writer) (opts Options, handled bool, err error)
 	fs.StringVar(&o.SSHPubKey, "ssh-pubkey", "", "install: public key to authorize before hardening")
 
 	fs.BoolVar(&o.EmptyMods, "empty-mods", false, "update: empty the mods folder instead of upgrading it")
-	fs.StringVar(&o.Unit, "unit", "", "update/restore: systemd service that manages the server (default mc-<instance>.service)")
+	mods := fs.String("mods", "", "add-mods: Modrinth slugs to install, comma separated")
+	fs.StringVar(&o.Unit, "unit", "", "update/restore/add-mods: systemd service that manages the server (default mc-<instance>.service)")
 	fs.StringVar(&o.Backup, "backup", "", "restore: backup zip to restore (path or filename)")
 
 	if err := fs.Parse(args); err != nil {
@@ -134,16 +139,30 @@ func Parse(args []string, out io.Writer) (opts Options, handled bool, err error)
 	if err := validateMode(o.Mode); err != nil {
 		return Options{}, false, err
 	}
+	o.Mods = splitSlugs(*mods)
 	return o, false, nil
 }
 
 func validateMode(mode string) error {
 	switch mode {
-	case "", "install", "update", "restore":
+	case "", "install", "update", "restore", "add-mods":
 		return nil
 	default:
-		return fmt.Errorf("unknown --mode %q: use install, update, or restore", mode)
+		return fmt.Errorf("unknown --mode %q: use install, update, restore, or add-mods", mode)
 	}
+}
+
+// splitSlugs turns a comma-separated flag value into the slugs it names,
+// tolerating spaces around them and ignoring empty entries so a trailing comma
+// isn't an error.
+func splitSlugs(value string) []string {
+	var slugs []string
+	for _, s := range strings.Split(value, ",") {
+		if s = strings.TrimSpace(s); s != "" {
+			slugs = append(slugs, s)
+		}
+	}
+	return slugs
 }
 
 // Interactive reports whether we're attached to a terminal. The wizard needs one;

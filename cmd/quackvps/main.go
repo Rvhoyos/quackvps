@@ -1,7 +1,7 @@
 // Command quackvps sets up a Minecraft server and its web-facing companion
 // services on a fresh Debian/Ubuntu VPS. It wires the pieces together: parse
 // flags, verify the environment, run the wizard to build a Config, validate it
-// once, then execute either an install or an in-place update.
+// once, then execute the action it describes.
 package main
 
 import (
@@ -14,6 +14,7 @@ import (
 
 	"github.com/charmbracelet/huh"
 
+	"github.com/rvhoyos/quackvps/internal/addmods"
 	"github.com/rvhoyos/quackvps/internal/cli"
 	"github.com/rvhoyos/quackvps/internal/config"
 	"github.com/rvhoyos/quackvps/internal/install"
@@ -102,6 +103,8 @@ func run() error {
 		return update.Run(ctx, cfg, client, updateConfirm(opts))
 	case config.ModeRestore:
 		return restore.Run(ctx, cfg)
+	case config.ModeAddMods:
+		return addmods.Run(ctx, cfg, client)
 	default:
 		return install.Run(ctx, cfg, client)
 	}

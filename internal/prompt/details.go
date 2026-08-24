@@ -3,6 +3,7 @@ package prompt
 import (
 	"context"
 	"fmt"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -38,11 +39,30 @@ func askLoader(cfg *config.Config) error {
 	return nil
 }
 
+// versionQuestion is the wording of the Minecraft-version question, which isn't
+// the same question in every flow: install and update choose the version the
+// server will run, while adding mods states the version it runs today.
+type versionQuestion struct {
+	title string
+	why   string
+}
+
+var (
+	targetVersion = versionQuestion{
+		title: "Which Minecraft version?",
+		why:   "The matching Java is installed automatically.",
+	}
+	runningVersion = versionQuestion{
+		title: "Which Minecraft version is this server running?",
+		why:   "Mods are published one build per version, so we have to name one.\n" + ui.Caution("Pick the version this server is already on, the one players join with. Nothing here changes it, and a mod built for another version won't load."),
+	}
+)
+
 // askMCVersion takes the Minecraft version. It offers the versions the chosen
 // loader can actually run (so e.g. NeoForge lists only 1.21+ and Forge only
 // 1.20.x); if that can't be fetched (offline), it falls back to validated free
-// text. Used by both install and update; on update the loader is already known.
-func askMCVersion(ctx context.Context, cfg *config.Config) error {
+// text. The loader is already known by the time it's asked.
+func askMCVersion(ctx context.Context, cfg *config.Config, q versionQuestion) error {
 	var releases []string
 	err := ui.Spinner("Loading "+cfg.Loader+" versions", func() error {
 		var e error
@@ -50,21 +70,21 @@ func askMCVersion(ctx context.Context, cfg *config.Config) error {
 		return e
 	})
 	if err == nil && len(releases) > 0 {
-		return selectMCVersion(cfg, releases)
+		return selectMCVersion(cfg, releases, q)
 	}
-	return inputMCVersion(cfg)
+	return inputMCVersion(cfg, q)
 }
 
 // selectMCVersion presents the fetched release list as a searchable dropdown.
-func selectMCVersion(cfg *config.Config, releases []string) error {
+func selectMCVersion(cfg *config.Config, releases []string, q versionQuestion) error {
 	version := releases[0] // newest
 	opts := make([]huh.Option[string], len(releases))
 	for i, v := range releases {
 		opts[i] = huh.NewOption(v, v)
 	}
 	field := huh.NewSelect[string]().
-		Title("Which Minecraft version?").
-		Description("Type to filter. The matching Java is installed automatically.").
+		Title(q.title).
+		Description("Type to filter. " + q.why).
 		Options(opts...).
 		Value(&version)
 	if err := field.Run(); err != nil {
@@ -76,14 +96,14 @@ func selectMCVersion(cfg *config.Config, releases []string) error {
 
 // inputMCVersion is the offline fallback: free text, validated against the
 // supported minimum.
-func inputMCVersion(cfg *config.Config) error {
+func inputMCVersion(cfg *config.Config, q versionQuestion) error {
 	version := cfg.MCVersion
 	if version == "" {
 		version = "1.21.8"
 	}
 	field := huh.NewInput().
-		Title("Which Minecraft version?").
-		Description(fmt.Sprintf("A release like 1.21.8 or 26.1.2 (minimum %s). The matching Java is installed automatically.", config.MinMCVersion)).
+		Title(q.title).
+		Description(fmt.Sprintf("A release like 1.21.8 or 26.1.2 (minimum %s). %s", config.MinMCVersion, q.why)).
 		Value(&version).
 		Validate(validateMCVersionInput)
 	if err := field.Run(); err != nil {
@@ -132,7 +152,8 @@ func askModpack(ctx context.Context, cfg *config.Config, client modrinth.Client)
 	choice := ""
 	field := huh.NewSelect[string]().
 		Title("Install a modpack? (a curated bundle of mods)").
-		Description("Community packs marked server-ready that have a build for your version. Type to filter; pick None to start bare, or enter any Modrinth slug yourself.\nNote: a pack's server tag is set by its author. If one won't start, try another and report it so we can drop it.").
+		Description("Community packs marked server-ready that have a build for your version. Type to filter; pick None to start bare, or enter any Modrinth slug yourself.\n" +
+			ui.Caution("A pack's server tag is set by its author, not checked by anyone. If one won't start, try another and report it so we can drop it.")).
 		Options(options...).
 		Value(&choice)
 	if err := field.Run(); err != nil {
@@ -188,6 +209,64 @@ func slugFromInput(s string) string {
 		s = s[i+1:]
 	}
 	return s
+}
+
+// askMods gathers the mods to install into a server that already exists, one
+// Modrinth slug at a time. Each one is checked for a build matching the server's
+// loader and Minecraft version before it's accepted, so a typo or a mod that
+// doesn't cover this version is caught here rather than halfway through the
+// install. A blank entry ends the list.
+func askMods(ctx context.Context, cfg *config.Config, client modrinth.Client) error {
+	for {
+		slug, err := askModSlug(cfg)
+		if err != nil {
+			return err
+		}
+		if slug == "" {
+			if len(cfg.Mods) == 0 {
+				return fmt.Errorf("cancelled: no mods were entered, so there's nothing to add")
+			}
+			return nil
+		}
+		if slices.Contains(cfg.Mods, slug) {
+			ui.Warn("%s is already on the list", slug)
+			continue
+		}
+
+		ok := false
+		if err := ui.Spinner("Checking "+slug+" on Modrinth", func() error {
+			ok = catalog.HasBuild(ctx, client, slug, cfg.Loader, cfg.MCVersion)
+			return nil
+		}); err != nil {
+			return err
+		}
+		if !ok {
+			ui.Warn("no %s mod %q with a build for Minecraft %s. Check the slug on the mod's Modrinth page", cfg.Loader, slug, cfg.MCVersion)
+			continue
+		}
+		cfg.Mods = append(cfg.Mods, slug)
+		ui.Success("%s will be added.", slug)
+	}
+}
+
+// askModSlug takes one slug, listing what's already queued so the user can see
+// the list grow and knows how to finish it.
+func askModSlug(cfg *config.Config) (string, error) {
+	description := fmt.Sprintf("The name from the mod's URL, e.g. modrinth.com/mod/simple-voice-chat. Its required dependencies come along automatically. Enter them one at a time; leave blank when you're done.\nInstalling into %s (%s %s).", cfg.Instance, cfg.Loader, cfg.MCVersion)
+	if len(cfg.Mods) > 0 {
+		description += "\nSo far: " + strings.Join(cfg.Mods, ", ")
+	}
+
+	slug := ""
+	field := huh.NewInput().
+		Title("Which mod should we add?").
+		Description(description).
+		Placeholder("simple-voice-chat").
+		Value(&slug)
+	if err := field.Run(); err != nil {
+		return "", err
+	}
+	return slugFromInput(slug), nil
 }
 
 // featureCandidate is an add-on the wizard can offer. It's shown only when every

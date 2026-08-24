@@ -143,3 +143,45 @@ func TestValidateWebFeatureNoDomainOK(t *testing.T) {
 		t.Fatalf("web feature without domain should be valid: %v", err)
 	}
 }
+
+func TestValidateAddMods(t *testing.T) {
+	// Adding mods needs a target, the service that manages it, the loader and
+	// version it runs, and at least one mod. RAM, ports and the web layer belong
+	// to install and aren't set here.
+	base := func() *Config {
+		c := New()
+		c.Mode = ModeAddMods
+		c.Parent = "/home/ubuntu/mcserver"
+		c.Instance = "survival"
+		c.ResolveDir()
+		c.RunAsUser = "ubuntu"
+		c.Unit = "mc-survival.service"
+		c.Loader = LoaderNeoForge
+		c.MCVersion = "1.21.8"
+		c.Mods = []string{"simple-voice-chat"}
+		return c
+	}
+
+	if err := base().Validate(); err != nil {
+		t.Fatalf("add-mods config should be valid: %v", err)
+	}
+
+	tests := []struct {
+		name   string
+		break_ func(*Config)
+	}{
+		{"no mods", func(c *Config) { c.Mods = nil }},
+		{"no managing unit", func(c *Config) { c.Unit = "" }},
+		{"no version", func(c *Config) { c.MCVersion = "" }},
+		{"vanilla has no loader", func(c *Config) { c.Loader = LoaderVanilla }},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			c := base()
+			tt.break_(c)
+			if err := c.Validate(); err == nil {
+				t.Errorf("expected validation error for %s", tt.name)
+			}
+		})
+	}
+}

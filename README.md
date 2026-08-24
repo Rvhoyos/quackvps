@@ -61,6 +61,7 @@ OpenSSH client ships with Windows 10 (1809+) and 11.
 - Installs the server (Fabric, NeoForge, Forge, Quilt, or Vanilla) with the matching Java, side by side, without touching your system Java.
 - Runs it as a `systemd` service inside `screen`: restarts on crash, starts on boot, attach a console with `screen -r <name>`.
 - Installs mods and modpacks from Modrinth, filtered live to ones that run on your loader and version.
+- Adds mods to a server you already have: pick it, name the mods, and they land in `mods/` with their dependencies while the server is stopped. The version comes from the server's own world data, so the builds match what it runs.
 - Sets up the optional web layer, picked on one screen:
   - **QuackedSMP** management panel (plus Votifier v2).
   - **BlueMap** live world map.
@@ -71,7 +72,7 @@ OpenSSH client ships with Windows 10 (1809+) and 11.
 
 Run `sudo quackvps` again to add another server. Each one gets its own folder, service, ports, and subdomains, and coexists with the rest. Ports are scanned every run and the next free one is the default.
 
-Works on a fresh VPS or one already running servers. New installs go in their own folder, service, and ports without touching what's already there, and update and restore work on any existing server, including ones this tool didn't create: mods are identified by hashing the jars, not from records this tool keeps.
+Works on a fresh VPS or one already running servers. New installs go in their own folder, service, and ports without touching what's already there, and updating, restoring, and adding mods work on any existing server, including ones this tool didn't create: the loader is read from the launch files on disk, the Minecraft version from `level.dat`, and existing mods are identified by hashing the jars, not from records this tool keeps.
 
 Updating or restoring a server set up by hand keeps its existing heap flags, read in gigabytes (`-Xms2G`, `-Xmx6G`). Write them that way rather than in megabytes (`-Xmx8192M`), which falls back to the default 1G/4G.
 
@@ -128,6 +129,10 @@ sudo quackvps --mode update --parent /home/ubuntu/mc --instance survival --mcver
 # Restore a world backup from the server's backups/ folder.
 sudo quackvps --mode restore --parent /home/ubuntu/mc --instance survival \
   --backup world-20260610-161024.zip
+
+# Add mods to it, dependencies included. Stops the server, installs, starts it back up.
+sudo quackvps --mode add-mods --parent /home/ubuntu/mc --instance survival \
+  --mods simple-voice-chat,bluemap
 ```
 
 Every run needs `--mode`, `--parent`, and `--instance`.
@@ -159,6 +164,15 @@ Every run needs `--mode`, `--parent`, and `--instance`.
 | Flag | Does |
 |---|---|
 | `--backup` | Backup zip to restore, by filename or full path, from the server's `backups/` folder. |
+
+**Add mods** (`--mode add-mods`):
+
+| Flag | Does |
+|---|---|
+| `--mods` | Modrinth slugs to install, comma separated. Required dependencies are pulled in too. |
+| `--mcversion` | Only for a server that has never generated a world. Otherwise the version is read from `level.dat`, and a mismatch with `--mcversion` stops the run before anything is downloaded. |
+
+Mods already installed are left alone. If the server won't start with the new jars, they are removed and it is started again, and the reason from its log is printed.
 
 <details>
 <summary>Roadmap (not yet available)</summary>

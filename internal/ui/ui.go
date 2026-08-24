@@ -13,9 +13,17 @@ import (
 	"github.com/charmbracelet/lipgloss"
 )
 
+// warnColor is the one color a warning ever uses: on the lines this package
+// prints and inside the prompts' own descriptions, so a caution looks the same
+// wherever it turns up. Orange rather than the usual yellow because it has to
+// stand out from the grey a prompt description is rendered in, which is exactly
+// where a warning gets skipped.
+const warnColor = lipgloss.Color("214")
+
 var (
 	headerStyle  = lipgloss.NewStyle().Bold(true)
-	warnStyle    = lipgloss.NewStyle().Foreground(lipgloss.Color("3"))
+	warnStyle    = lipgloss.NewStyle().Foreground(warnColor)
+	cautionStyle = lipgloss.NewStyle().Foreground(warnColor).Bold(true)
 	successStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("2"))
 	errorStyle   = lipgloss.NewStyle().Foreground(lipgloss.Color("1"))
 )
@@ -31,6 +39,14 @@ func Info(format string, args ...any) { fmt.Println(msg(format, args...)) }
 
 // Warn prints a non-fatal warning.
 func Warn(format string, args ...any) { fmt.Println(warnStyle.Render("  ! " + msg(format, args...))) }
+
+// Caution returns a warning line to put at the end of a prompt's description,
+// the one place this package doesn't print for itself. The prompt library renders
+// a description in grey; this keeps its color through the form's own styling, so
+// the part the user must not miss doesn't read like the rest of the hint.
+func Caution(format string, args ...any) string {
+	return cautionStyle.Render("! " + msg(format, args...))
+}
 
 // Success prints a completed-step line.
 func Success(format string, args ...any) {
