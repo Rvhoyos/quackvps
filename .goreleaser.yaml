@@ -5,6 +5,10 @@ builds:
     binary: quackvps
     env:
       - CGO_ENABLED=0
+    # Stamp the tag into cli.Version; without this every build reports "dev".
+    # -s -w keeps the default stripping that specifying ldflags would drop.
+    ldflags:
+      - -s -w -X github.com/rvhoyos/quackvps/internal/cli.Version={{ .Version }}
     goos:
       - linux
     goarch:
