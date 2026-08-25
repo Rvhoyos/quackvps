@@ -148,6 +148,6 @@ jobs:
             if [ "$total" -gt 0 ]; then
               echo "**$((total - failed))/$total booted — $failed failed ($((failed * 100 / total))% of versions).**"
             else
-              echo "**No versions tested (the pack had no buildable versions).**"
+              echo "**No versions tested (the pack had no buildable, unparked versions).**"
             fi
           } >> "$GITHUB_STEP_SUMMARY"

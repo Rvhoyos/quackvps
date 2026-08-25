@@ -293,8 +293,13 @@ func VerifyBuildable(ctx context.Context, cfg *config.Config, client modrinth.Cl
 		return nil // update reuses on-disk mods; nothing else to verify
 	}
 
-	if cfg.Modpack != "" && !catalog.HasBuild(ctx, client, cfg.Modpack, cfg.Loader, cfg.MCVersion) {
-		return fmt.Errorf("modpack %q has no %s build for Minecraft %s", cfg.Modpack, cfg.Loader, cfg.MCVersion)
+	if cfg.Modpack != "" {
+		if catalog.Disabled(cfg.Loader, cfg.Modpack, cfg.MCVersion) {
+			return fmt.Errorf("modpack %q is parked for Minecraft %s: our boot test found it crashes on start there. Pick another version or another pack", cfg.Modpack, cfg.MCVersion)
+		}
+		if !catalog.HasBuild(ctx, client, cfg.Modpack, cfg.Loader, cfg.MCVersion) {
+			return fmt.Errorf("modpack %q has no %s build for Minecraft %s", cfg.Modpack, cfg.Loader, cfg.MCVersion)
+		}
 	}
 	for _, slug := range cfg.Mods {
 		if !catalog.HasBuild(ctx, client, slug, cfg.Loader, cfg.MCVersion) {

@@ -80,21 +80,74 @@ func TestModpacksVanillaEmpty(t *testing.T) {
 	}
 }
 
+// unparkedVersion is a version no park entry will ever name, so a check against it
+// asks "is this pack parked everywhere?" without depending on the curated list.
+const unparkedVersion = "1.99.9"
+
 func TestModpacksSkipsDisabled(t *testing.T) {
 	if len(disabledPacks) == 0 {
 		t.Skip("no parked packs to exercise")
 	}
-	d := disabledPacks[0]
-
-	// Give the parked slug a build; it must still be excluded from the offers.
-	c := fakeClient{withBuild: map[string]bool{d.slug: true}}
-	offers, err := Modpacks(context.Background(), c, d.loader, "1.20.1")
-	if err != nil {
-		t.Fatal(err)
+	for _, d := range disabledPacks {
+		// Give the parked slug a build; it must still be excluded from the offers
+		// for the version it's parked on.
+		mc := d.mc
+		if mc == "" {
+			mc = unparkedVersion // a blanket park hides the pack on any version
+		}
+		c := fakeClient{withBuild: map[string]bool{d.slug: true}}
+		offers, err := Modpacks(context.Background(), c, d.loader, mc)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, o := range offers {
+			if o.Slug == d.slug {
+				t.Errorf("pack %q parked on %q should not be offered for %s", d.slug, d.mc, mc)
+			}
+		}
 	}
-	for _, o := range offers {
-		if o.Slug == d.slug {
-			t.Fatalf("parked pack %q should not be offered", d.slug)
+}
+
+func TestModpacksStillOffersOtherVersions(t *testing.T) {
+	// The point of a version-specific park: the pack keeps being installable on the
+	// versions that boot.
+	for _, d := range disabledPacks {
+		if d.mc == "" {
+			continue
+		}
+		c := fakeClient{withBuild: map[string]bool{d.slug: true}}
+		offers, err := Modpacks(context.Background(), c, d.loader, unparkedVersion)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var found bool
+		for _, o := range offers {
+			if o.Slug == d.slug {
+				found = true
+			}
+		}
+		if !found {
+			t.Errorf("pack %q is parked only on %s, so it must still be offered for %s", d.slug, d.mc, unparkedVersion)
+		}
+	}
+}
+
+func TestDisabledScopedToTheParkedVersion(t *testing.T) {
+	for _, d := range disabledPacks {
+		if !Disabled(d.loader, d.slug, d.mc) {
+			t.Errorf("%q should be parked on %q", d.slug, d.mc)
+		}
+		if d.mc == "" {
+			if !Disabled(d.loader, d.slug, unparkedVersion) {
+				t.Errorf("blanket park %q should cover every version", d.slug)
+			}
+			continue
+		}
+		if Disabled(d.loader, d.slug, unparkedVersion) {
+			t.Errorf("%q is parked only on %s, not on every version", d.slug, d.mc)
+		}
+		if Disabled(d.loader, d.slug, "") {
+			t.Errorf("%q is a version park, so it must not answer a blanket-park query", d.slug)
 		}
 	}
 }
@@ -103,19 +156,22 @@ func TestAllFeaturedKeepsDisabledInPlace(t *testing.T) {
 	if len(disabledPacks) == 0 {
 		t.Skip("no parked packs to exercise")
 	}
-	d := disabledPacks[0]
-
-	var found bool
-	for _, p := range AllFeatured() {
-		if p.Loader == d.loader && p.Slug == d.slug {
+	for _, d := range disabledPacks {
+		var found bool
+		for _, p := range AllFeatured() {
+			if p.Loader != d.loader || p.Slug != d.slug {
+				continue
+			}
 			found = true
-			if !p.Disabled {
-				t.Errorf("parked pack %q should be marked Disabled in AllFeatured", d.slug)
+			// Only a blanket park takes the pack out of the CI rotation; a version
+			// park leaves it in and is applied per version by the matrix builder.
+			if want := d.mc == ""; p.Disabled != want {
+				t.Errorf("%q Disabled = %v, want %v", d.slug, p.Disabled, want)
 			}
 		}
-	}
-	if !found {
-		t.Fatalf("parked pack %q must stay in AllFeatured to keep the day-index stable", d.slug)
+		if !found {
+			t.Errorf("parked pack %q must stay in AllFeatured to keep the day-index stable", d.slug)
+		}
 	}
 }
 

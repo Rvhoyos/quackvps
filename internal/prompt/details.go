@@ -186,6 +186,11 @@ func askManualSlug(ctx context.Context, cfg *config.Config, client modrinth.Clie
 			return nil
 		}
 
+		if catalog.Disabled(cfg.Loader, slug, cfg.MCVersion) {
+			ui.Warn("%s doesn't start on Minecraft %s in our boot test, so it's parked. Try another version, or another pack", slug, cfg.MCVersion)
+			continue
+		}
+
 		ok := false
 		if err := ui.Spinner("Checking the slug on Modrinth", func() error {
 			ok = catalog.HasBuild(ctx, client, slug, cfg.Loader, cfg.MCVersion)

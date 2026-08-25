@@ -45,8 +45,8 @@ type featuredPack struct {
 
 // Pack is a curated modpack tagged with the loader it belongs to, the flattened
 // form of the per-loader featured lists. The boot-test CI walks these. Disabled
-// marks a pack that stays in the list (so the CI day-index doesn't shift) but is
-// never booted or offered — see disabledPacks.
+// marks a pack parked for every Minecraft version: it stays in the list (so the
+// CI day-index doesn't shift) but is never booted or offered.
 type Pack struct {
 	Slug     string
 	Loader   string
@@ -54,21 +54,32 @@ type Pack struct {
 	Disabled bool
 }
 
-// disabledPack identifies a curated pack pulled from rotation for one loader.
-type disabledPack struct{ loader, slug string }
+// disabledPack identifies a curated pack pulled from rotation. An empty mc parks
+// every version of the pack for that loader; otherwise only that one version is
+// parked and the rest stay on offer.
+type disabledPack struct{ loader, slug, mc string }
 
-// disabledPacks are packs the boot-test CI caught failing to boot. They stay in
-// featured() so the CI's day-index (packs[day % len]) never shifts, but they're
-// never booted by CI nor offered to users. Un-park by deleting the line.
+// disabledPacks are packs the boot-test CI caught failing to boot, each with the
+// Minecraft version it failed on. They stay in featured() so the CI's day-index
+// (packs[day % len]) never shifts, but a parked version is never booted by CI nor
+// installable. Un-park by deleting the line; re-test one first with a manual
+// workflow_dispatch run of modpack-boot.
 var disabledPacks = []disabledPack{
-	{config.LoaderFabric, "ardacraft"}, // ardasettings preLaunch crash on 1.20.1 (seen 2026-08-14)
+	{config.LoaderFabric, "ardacraft", ""},                       // ardasettings preLaunch crash, its only build (2026-08-14)
+	{config.LoaderFabric, "better-adventures++", "1.21.1"},       // missing modmenu deps; 1.20.1 + 1.21.11 boot fine (2026-08-16)
+	{config.LoaderNeoForge, "cobblemon-neoforge", "1.21.1"},      // a Fabric citresewn jar in a NeoForge pack (2026-08-21)
+	{config.LoaderNeoForge, "cobblemon-x-creating", "1.21.1"},    // crashes while loading (2026-08-22)
+	{config.LoaderNeoForge, "better-mc-neoforge-bmc5", "1.21.1"}, // InvocationTargetException during load (2026-08-23)
+	{config.LoaderNeoForge, "farming-experience", "1.21.1"},      // Fog (fog) fails to load (2026-08-25)
 }
 
-// isDisabled reports whether a pack is parked out of rotation for a loader. The
+// Disabled reports whether a curated pack is parked for a Minecraft version, i.e.
+// the boot test caught it crashing there. An empty mc asks only about a blanket
+// park (every version), which is how the CI rotation skips a pack outright. The
 // list is tiny, so a linear scan is plenty.
-func isDisabled(loader, slug string) bool {
+func Disabled(loader, slug, mc string) bool {
 	for _, d := range disabledPacks {
-		if d.loader == loader && d.slug == slug {
+		if d.loader == loader && d.slug == slug && (d.mc == "" || d.mc == mc) {
 			return true
 		}
 	}
@@ -87,7 +98,7 @@ func AllFeatured() []Pack {
 				Slug:     p.slug,
 				Loader:   loaderName,
 				Title:    p.title,
-				Disabled: isDisabled(loaderName, p.slug),
+				Disabled: Disabled(loaderName, p.slug, ""),
 			})
 		}
 	}
@@ -176,7 +187,7 @@ func SupportsModpacks(loader string) bool {
 func Modpacks(ctx context.Context, c modrinth.Client, loader, mc string) ([]ModpackOffer, error) {
 	offers := make([]ModpackOffer, 0)
 	for _, p := range featured(loader) {
-		if isDisabled(loader, p.slug) {
+		if Disabled(loader, p.slug, mc) {
 			continue
 		}
 		if HasBuild(ctx, c, p.slug, loader, mc) {

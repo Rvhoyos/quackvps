@@ -68,6 +68,11 @@ func SelectMatrix(ctx context.Context, client modrinth.Client, day int) (Matrix,
 	// keeping the JSON the workflow parses well-formed even for a pack with no builds.
 	m := Matrix{Loader: pack.Loader, Slug: pack.Slug, Entries: []Version{}}
 	for _, v := range versions {
+		// A version parked by the boot test is skipped before the lookup, so the
+		// pack keeps being tested on the versions that do work.
+		if catalog.Disabled(pack.Loader, pack.Slug, v) {
+			continue
+		}
 		if !catalog.HasBuild(ctx, client, pack.Slug, pack.Loader, v) {
 			continue
 		}
