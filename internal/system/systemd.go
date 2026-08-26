@@ -119,13 +119,33 @@ func UnitOOMKilled(ctx context.Context, unit string) bool {
 	return err == nil && strings.TrimSpace(out) == "oom-kill"
 }
 
+// DisableNow stops a unit and takes it off the boot sequence, leaving its file in
+// place. It's how a service we didn't write is retired: the server it managed is
+// going away, but the unit is the user's file to keep.
+func DisableNow(ctx context.Context, unit string) error {
+	return Run(ctx, "systemctl", "disable", "--now", unit)
+}
+
 // RemoveUnit stops and disables a unit, deletes its file, and reloads systemd.
-// It's best-effort, used to roll back a failed install, so each step's error is
-// ignored; the goal is simply to leave nothing behind.
+// It's best-effort, used to roll back a failed install and to retire a service we
+// wrote when its server is removed, so each step's error is ignored: the goal is
+// simply to leave nothing behind.
 func RemoveUnit(ctx context.Context, unit string) {
-	_ = Run(ctx, "systemctl", "disable", "--now", unit)
+	_ = DisableNow(ctx, unit)
 	_ = os.Remove(filepath.Join(unitDir, unit))
 	_ = DaemonReload(ctx)
+}
+
+// UnitMarker is the string every unit we write carries in its Description. A
+// user's own service lives in the same directory, so the file's presence proves
+// nothing; this is what tells the two apart.
+const UnitMarker = "managed by quackvps"
+
+// OwnUnitFile reports whether a unit's file is one we wrote, meaning it's ours to
+// delete along with the server. A unit the user set up is stopped but left alone.
+func OwnUnitFile(unit string) bool {
+	data, err := os.ReadFile(filepath.Join(unitDir, unit))
+	return err == nil && strings.Contains(string(data), UnitMarker)
 }
 
 // IsActive reports whether a unit is currently running.

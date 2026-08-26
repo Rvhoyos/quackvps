@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 )
 
@@ -79,4 +80,20 @@ func WriteProps(path string, props map[string]string) error {
 		return fmt.Errorf("write %s: %w", path, err)
 	}
 	return nil
+}
+
+// ServerPort returns the game port from an instance's server.properties, and
+// whether it names one. A server that has never generated the file, or one that
+// leaves the key out, runs on Minecraft's own default, which is what the false
+// tells the caller.
+func ServerPort(dir string) (int, bool) {
+	props, err := ReadProps(filepath.Join(dir, "server.properties"))
+	if err != nil {
+		return 0, false
+	}
+	port, err := strconv.Atoi(props["server-port"])
+	if err != nil {
+		return 0, false
+	}
+	return port, true
 }

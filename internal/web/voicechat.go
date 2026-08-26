@@ -20,7 +20,7 @@ func (voicechat) DefaultSubdomain() string { return "" }
 func (voicechat) Proto() string            { return "udp" }
 
 func (v voicechat) WritePort(dir string, port int) error {
-	conf := filepath.Join(dir, "config", "voicechat", "voicechat-server.properties")
+	conf := voiceChatConfig(dir)
 	return setPropKey(conf, keysVoicePort, strconv.Itoa(port))
 }
 
@@ -30,8 +30,14 @@ func (v voicechat) WritePort(dir string, port int) error {
 // and can't connect. Writing the public IP overrides that. Voice is a direct UDP
 // connection (never proxied), so the raw IP is what clients need.
 func SetVoiceHost(dir, ip string) error {
-	conf := filepath.Join(dir, "config", "voicechat", "voicechat-server.properties")
+	conf := voiceChatConfig(dir)
 	return setPropKey(conf, keysVoiceHost, ip)
 }
 
 func (voicechat) CaddyBlock(string, string, int) string { return "" }
+
+// voiceChatConfig is the single source of truth for the mod's config location,
+// written on install and read back when a server is removed.
+func voiceChatConfig(dir string) string {
+	return filepath.Join(dir, "config", "voicechat", "voicechat-server.properties")
+}

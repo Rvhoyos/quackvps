@@ -24,6 +24,7 @@ const (
 	ModeUpdate              // upgrade an existing instance in place
 	ModeRestore             // restore a world backup into an existing instance
 	ModeAddMods             // add mods to an existing instance
+	ModeRemove              // tear an existing instance down
 )
 
 func (m Mode) String() string {
@@ -36,6 +37,8 @@ func (m Mode) String() string {
 		return "restore"
 	case ModeAddMods:
 		return "add-mods"
+	case ModeRemove:
+		return "remove"
 	default:
 		return "unknown"
 	}
@@ -121,6 +124,15 @@ type Config struct {
 	// and the user asked us to create one before managing it.
 	AdoptUnit bool
 
+	// What a removal takes away, answered on one screen. Infra is the service, the
+	// firewall rules and the reverse-proxy entry; Files is the instance folder and
+	// everything in it. Either alone is a valid run. RemoveUnitFile settles the case
+	// we can't assume: a service the user wrote themselves, which is stopped and
+	// disabled either way but only deleted when they say so.
+	RemoveInfra    bool
+	RemoveFiles    bool
+	RemoveUnitFile bool
+
 	ServerPort int      // MC game port (UFW TCP)
 	Modpack    string   // Modrinth slug, or "" for none
 	Mods       []string // extra mod slugs, e.g. quackedsmp
@@ -170,12 +182,14 @@ var validLoaders = map[string]bool{
 //
 // The checks split by mode. Every flow needs a valid target (parent, instance,
 // dir) and a non-root run-as user. Install, update, and adding mods also need a
-// loader and MC version; restore doesn't touch either (it only swaps the world).
-// Only install configures RAM, ports, features, and the web layer from the
-// wizard, on the modes that work on an existing server those are read from disk,
-// so they aren't validated here.
+// loader and MC version; restore and removal touch neither (one swaps the world,
+// the other takes the server away). Only install configures RAM, ports, features,
+// and the web layer from the wizard, on the modes that work on an existing server
+// those are read from disk, so they aren't validated here.
 func (c *Config) Validate() error {
-	if c.Mode != ModeInstall && c.Mode != ModeUpdate && c.Mode != ModeRestore && c.Mode != ModeAddMods {
+	switch c.Mode {
+	case ModeInstall, ModeUpdate, ModeRestore, ModeAddMods, ModeRemove:
+	default:
 		return fmt.Errorf("mode not set")
 	}
 
@@ -204,13 +218,16 @@ func (c *Config) Validate() error {
 		}
 		return c.validateInstall()
 	case ModeAddMods:
-		if err := c.validateManagingUnit(); err != nil {
-			return err
-		}
+		// No unit check: adding mods to a server that has no service writes the jars
+		// and leaves the server alone, so an empty unit is a valid run.
 		if err := c.validateLoaderAndVersion(); err != nil {
 			return err
 		}
 		return c.validateAddMods()
+	case ModeRemove:
+		// No unit check and no loader: a server with no service is a valid thing to
+		// remove, and nothing here needs to know what it ran.
+		return c.validateRemove()
 	default: // ModeUpdate
 		if err := c.validateManagingUnit(); err != nil {
 			return err
@@ -271,6 +288,16 @@ func (c *Config) validateAddMods() error {
 	}
 	if c.Loader == LoaderVanilla {
 		return fmt.Errorf("%s runs vanilla Minecraft, which has no mod loader: reinstall it with a loader to run mods", c.Dir)
+	}
+	return nil
+}
+
+// validateRemove checks that a removal has something to take away. The two halves
+// are independent: the service, firewall rules and proxy entry on one side, the
+// folder on the other. Neither one chosen is a run that would do nothing.
+func (c *Config) validateRemove() error {
+	if !c.RemoveInfra && !c.RemoveFiles {
+		return fmt.Errorf("nothing to remove: choose the server's service and firewall rules, its folder, or both")
 	}
 	return nil
 }

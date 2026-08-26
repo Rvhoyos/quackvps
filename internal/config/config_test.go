@@ -166,12 +166,18 @@ func TestValidateAddMods(t *testing.T) {
 		t.Fatalf("add-mods config should be valid: %v", err)
 	}
 
+	// A server with no service takes mods too; it just isn't stopped and started.
+	noUnit := base()
+	noUnit.Unit = ""
+	if err := noUnit.Validate(); err != nil {
+		t.Fatalf("add-mods without a managing unit should be valid: %v", err)
+	}
+
 	tests := []struct {
 		name   string
 		break_ func(*Config)
 	}{
 		{"no mods", func(c *Config) { c.Mods = nil }},
-		{"no managing unit", func(c *Config) { c.Unit = "" }},
 		{"no version", func(c *Config) { c.MCVersion = "" }},
 		{"vanilla has no loader", func(c *Config) { c.Loader = LoaderVanilla }},
 	}
@@ -181,6 +187,49 @@ func TestValidateAddMods(t *testing.T) {
 			tt.break_(c)
 			if err := c.Validate(); err == nil {
 				t.Errorf("expected validation error for %s", tt.name)
+			}
+		})
+	}
+}
+
+func TestValidateRemove(t *testing.T) {
+	// Removal needs a target and at least one of the two things it can take away.
+	// It deliberately needs no unit (a server may have no service) and no loader or
+	// version (nothing here cares what it ran).
+	base := func() *Config {
+		c := New()
+		c.Mode = ModeRemove
+		c.Parent = "/home/ubuntu/mcserver"
+		c.Instance = "survival"
+		c.ResolveDir()
+		c.RunAsUser = "ubuntu"
+		c.RemoveInfra = true
+		c.RemoveFiles = true
+		return c
+	}
+
+	tests := []struct {
+		name  string
+		set   func(*Config)
+		valid bool
+	}{
+		{"both halves", func(*Config) {}, true},
+		{"infra only", func(c *Config) { c.RemoveFiles = false }, true},
+		{"files only", func(c *Config) { c.RemoveInfra = false }, true},
+		{"no service to manage", func(c *Config) { c.Unit = "" }, true},
+		{"neither half", func(c *Config) { c.RemoveInfra, c.RemoveFiles = false, false }, false},
+		{"no instance", func(c *Config) { c.Instance = ""; c.ResolveDir() }, false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			c := base()
+			tt.set(c)
+			err := c.Validate()
+			if tt.valid && err != nil {
+				t.Errorf("should be valid: %v", err)
+			}
+			if !tt.valid && err == nil {
+				t.Error("expected a validation error")
 			}
 		})
 	}

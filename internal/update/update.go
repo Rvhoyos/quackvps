@@ -84,7 +84,7 @@ func Run(ctx context.Context, cfg *config.Config, client modrinth.Client, confir
 // run.sh (preserving the existing RAM), re-downloads the resolved mods, and hands
 // the instance back to owner, the account the server runs as.
 func upgrade(ctx context.Context, cfg *config.Config, resolved map[string]modrinth.Version, owner string) error {
-	minGB, maxGB := readHeap(cfg.Dir)
+	minGB, maxGB := minecraft.ReadHeap(cfg.Dir)
 
 	javaPath, err := ensureJava(ctx, cfg)
 	if err != nil {

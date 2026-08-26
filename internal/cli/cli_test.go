@@ -10,7 +10,7 @@ import (
 )
 
 func TestValidateMode(t *testing.T) {
-	for _, m := range []string{"", "install", "update", "restore", "add-mods"} {
+	for _, m := range []string{"", "install", "update", "restore", "add-mods", "remove"} {
 		if err := validateMode(m); err != nil {
 			t.Errorf("mode %q should be accepted: %v", m, err)
 		}
@@ -184,5 +184,57 @@ func TestParseMods(t *testing.T) {
 	}
 	if len(opts.Mods) != 2 || opts.Mods[0] != "bluemap" || opts.Mods[1] != "simple-voice-chat" {
 		t.Errorf("Mods = %v, want [bluemap simple-voice-chat]", opts.Mods)
+	}
+}
+
+// TestConfigureRemoveMissingFlags checks the two answers a scripted removal can't
+// be asked. Both are caught before anything reads the disk or systemd.
+func TestConfigureRemoveMissingFlags(t *testing.T) {
+	tests := []struct {
+		name string
+		opts Options
+	}{
+		{"no --yes", Options{Mode: "remove", Parent: "/srv/mc", Instance: "survival", Remove: "infra,files"}},
+		{"no --remove", Options{Mode: "remove", Parent: "/srv/mc", Instance: "survival", Yes: true}},
+		{"unknown part", Options{Mode: "remove", Parent: "/srv/mc", Instance: "survival", Remove: "world", Yes: true}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if err := Configure(context.Background(), config.New(), tt.opts); err == nil {
+				t.Error("expected an error naming the missing flag")
+			}
+		})
+	}
+}
+
+func TestParseRemoveParts(t *testing.T) {
+	tests := []struct {
+		list                 string
+		wantInfra, wantFiles bool
+		wantErr              bool
+	}{
+		{list: "infra,files", wantInfra: true, wantFiles: true},
+		{list: "files", wantFiles: true},
+		{list: " infra , ", wantInfra: true},
+		{list: "", wantErr: true},
+		{list: "everything", wantErr: true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.list, func(t *testing.T) {
+			cfg := config.New()
+			err := parseRemoveParts(cfg, tt.list)
+			if tt.wantErr {
+				if err == nil {
+					t.Fatalf("expected an error for %q", tt.list)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if cfg.RemoveInfra != tt.wantInfra || cfg.RemoveFiles != tt.wantFiles {
+				t.Errorf("infra/files = %v/%v, want %v/%v", cfg.RemoveInfra, cfg.RemoveFiles, tt.wantInfra, tt.wantFiles)
+			}
+		})
 	}
 }

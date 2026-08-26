@@ -64,17 +64,23 @@ func askInstanceName(parent string) (string, error) {
 }
 
 // resolveExisting handles the branch when the folder already holds a server:
-// update it in place, restore a world backup, add mods to it, or cancel so the
-// user can pick a different name. Never clobbers.
+// update it in place, restore a world backup, add mods to it, remove it from the
+// box, or cancel so the user can pick a different name. Never clobbers.
 func resolveExisting(ctx context.Context, cfg *config.Config) error {
 	choice := "update"
 	field := huh.NewSelect[string]().
 		Title(fmt.Sprintf("%s already has a server. What now?", cfg.Dir)).
-		Description("Update keeps your world and upgrades the loader/mods. Restore rolls the world back to a saved backup. Add mods installs more mods into the server you have, world and version untouched. Cancel lets you re-run and choose a different name; we never overwrite an existing server.").
+		Description(ui.Keys("Up and down to move, enter to choose.")+"\n"+
+			"Update keeps your world and upgrades the loader and mods.\n"+
+			"Restore rolls the world back to a saved backup.\n"+
+			"Add mods installs more mods into the server you have, world and version untouched.\n"+
+			"Remove takes it off this box.\n"+
+			"Cancel lets you re-run and choose a different name. We never overwrite an existing server.").
 		Options(
 			huh.NewOption("Update it in place", "update"),
 			huh.NewOption("Restore a world backup", "restore"),
 			huh.NewOption("Add mods to it", "addmods"),
+			huh.NewOption("Remove it from this box", "remove"),
 			huh.NewOption("Cancel", "cancel"),
 		).
 		Value(&choice)
@@ -88,20 +94,51 @@ func resolveExisting(ctx context.Context, cfg *config.Config) error {
 		cfg.Mode = config.ModeRestore
 	case "addmods":
 		cfg.Mode = config.ModeAddMods
+	case "remove":
+		cfg.Mode = config.ModeRemove
 	default:
 		cfg.Mode = config.ModeUpdate
 	}
-	// Every one of these modes stops and starts the server, so they need the
-	// service that manages it before anything else is asked.
+	// Every one of these modes takes the server offline, so they need the service
+	// that manages it before anything else is asked.
 	return resolveUnit(ctx, cfg)
 }
 
 // Answers the service prompts return alongside real unit names: create one for
-// this instance, or show every service on the box.
+// this instance, go ahead without one, show every service on the box, or come
+// back from that list empty-handed.
 const (
 	createUnit  = "\x00create-unit"
 	browseUnits = "\x00browse-units"
+	skipUnit    = "\x00skip-unit"
+	backUnits   = "\x00back-units"
 )
+
+// unitAnswers are the answers a mode offers besides naming a service. Every mode
+// lists the units that point at the folder; they differ in what may stand in for
+// one. create is empty when the mode has no use for a new service, none is empty
+// when the mode can't work without one.
+type unitAnswers struct {
+	create string
+	none   string
+}
+
+func answersFor(mode config.Mode) unitAnswers {
+	switch mode {
+	case config.ModeAddMods:
+		// Adding mods only writes jars, so a server with no service still takes them.
+		return unitAnswers{
+			create: "Create a service for this server",
+			none:   "No service, just install the mods (server will still need restarting)",
+		}
+	case config.ModeRemove:
+		// Creating a service in order to delete it a moment later makes no sense; a
+		// server that has none is simply removed as the files it is.
+		return unitAnswers{none: "This server has no service"}
+	default:
+		return unitAnswers{create: "Create a service for this server"}
+	}
+}
 
 // resolveUnit records which systemd service manages this instance. Servers we
 // installed have mc-<instance>.service and are taken as-is; a server set up by
@@ -119,22 +156,27 @@ func resolveUnit(ctx context.Context, cfg *config.Config) error {
 }
 
 // askUnit settles which service manages this server. It offers the short answer
-// first, the services that point at this folder plus "create one", because that
-// covers nearly every server; the box's full service list is one step further in,
+// first, the services that point at this folder plus whatever this mode allows
+// instead of one, because that covers nearly every server. The box's full service
+// list is one step further in,
 // for a unit that names neither its folder nor this instance. Picking an unrelated
 // service is the one dangerous answer here, so that path is confirmed separately.
 func askUnit(cfg *config.Config, services []system.Unit) error {
+	answers := answersFor(cfg.Mode)
 	matches := system.UnitsForInstance(services, cfg.Dir)
 	for {
-		choice, err := askManagingService(cfg.Dir, matches)
+		choice, err := askManagingService(cfg.Dir, matches, answers)
 		if err != nil {
 			return err
 		}
 
 		if choice == browseUnits {
-			choice, err = askAnyService(cfg.Dir, services)
+			choice, err = askAnyService(cfg.Dir, services, answers)
 			if err != nil {
 				return err
+			}
+			if choice == backUnits {
+				continue // came back empty-handed, back to the short list
 			}
 			if choice != createUnit {
 				ok, err := confirmService(cfg.Dir, choice)
@@ -147,28 +189,36 @@ func askUnit(cfg *config.Config, services []system.Unit) error {
 			}
 		}
 
-		if choice == createUnit {
+		switch choice {
+		case createUnit:
 			cfg.Unit = minecraft.UnitName(cfg.Instance) + ".service"
 			cfg.AdoptUnit = true
-			return nil
+		case skipUnit:
+			// No unit: adding mods leaves the server as it is, and removing one just
+			// deletes files.
+		default:
+			cfg.Unit = choice
 		}
-		cfg.Unit = choice
 		return nil
 	}
 }
 
 // askManagingService is the first screen: the services that already point at this
-// folder, creating one, and the way out to the full list. A server nobody set up
-// as a service is the common case, so creating one leads when nothing matches.
-func askManagingService(dir string, matches []system.Unit) (string, error) {
-	options := make([]huh.Option[string], 0, len(matches)+2)
+// folder, whatever this mode allows instead of one, and the way out to the full
+// list. A server nobody set up as a service is the common case, so that answer
+// leads when nothing matches.
+func askManagingService(dir string, matches []system.Unit, answers unitAnswers) (string, error) {
+	options := make([]huh.Option[string], 0, len(matches)+3)
 	for _, u := range matches {
 		options = append(options, huh.NewOption(u.Name+" (runs in "+dir+")", u.Name))
 	}
-	options = append(options,
-		huh.NewOption("Create a service for this server", createUnit),
-		huh.NewOption("Let me pick from every service on this box", browseUnits),
-	)
+	if answers.create != "" {
+		options = append(options, huh.NewOption(answers.create, createUnit))
+	}
+	if answers.none != "" {
+		options = append(options, huh.NewOption(answers.none, skipUnit))
+	}
+	options = append(options, huh.NewOption("Let me pick from every service on this box", browseUnits))
 
 	choice := options[0].Value
 	field := huh.NewSelect[string]().
@@ -179,19 +229,24 @@ func askManagingService(dir string, matches []system.Unit) (string, error) {
 	return choice, field.Run()
 }
 
+// managingDescription says the one thing the options can't: which answer is
+// likely right here.
 func managingDescription(matches []system.Unit) string {
-	const why = "We stop and start the server through systemd, so we need to know its service. Creating one is safe on a server that has none: it runs the same run.sh, as the same user, and starts again after a reboot."
 	if len(matches) == 0 {
-		return "No service on this box names this folder, which usually means the server has none. It can also mean its service starts the server some other way, in which case the last option lets you find it by name. " + why
+		return "No service on this box names this folder."
 	}
-	return "The service listed first runs out of this folder, so it's almost certainly the one. If your server is run by a service that names the folder nowhere, the last option lists them all. " + why
+	return "The first service runs out of this folder, so it's almost certainly the one."
 }
 
 // askAnyService lists every service on the box, for the server whose unit names
 // neither its folder nor anything we can match on.
-func askAnyService(dir string, services []system.Unit) (string, error) {
+func askAnyService(dir string, services []system.Unit, answers unitAnswers) (string, error) {
 	options := make([]huh.Option[string], 0, len(services)+1)
-	options = append(options, huh.NewOption("Go back and create a service for this server instead", createUnit))
+	if answers.create != "" {
+		options = append(options, huh.NewOption("Go back and create a service for this server instead", createUnit))
+	} else {
+		options = append(options, huh.NewOption("Go back", backUnits))
+	}
 	for _, u := range services {
 		options = append(options, huh.NewOption(u.Name, u.Name))
 	}

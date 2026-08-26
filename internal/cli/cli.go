@@ -26,7 +26,7 @@ type Options struct {
 	// applies to a wizard run; the non-interactive path uses Parent/Instance.
 	Dir string
 
-	Mode     string // "" (wizard), or install / update / restore / add-mods
+	Mode     string // "" (wizard), or install / update / restore / add-mods / remove
 	Parent   string
 	Instance string
 
@@ -70,6 +70,12 @@ type Options struct {
 
 	// Restore field.
 	Backup string
+
+	// Remove fields. Remove is the flag form of the wizard's checklist, and Yes
+	// stands in for the two confirmations it can't ask a script.
+	Remove         string
+	RemoveUnitFile bool
+	Yes            bool
 }
 
 // Parse reads args (excluding the program name). It returns handled=true when it
@@ -89,7 +95,7 @@ func Parse(args []string, out io.Writer) (opts Options, handled bool, err error)
 	showVersion := fs.Bool("version", false, "print the version and exit")
 	var o Options
 	fs.StringVar(&o.Dir, "dir", "", "parent folder to start the interactive picker in")
-	fs.StringVar(&o.Mode, "mode", "", "non-interactive: install, update, restore, or add-mods")
+	fs.StringVar(&o.Mode, "mode", "", "non-interactive: install, update, restore, add-mods, or remove")
 	fs.StringVar(&o.Parent, "parent", "", "parent folder that holds servers, e.g. /home/ubuntu/mcserver")
 	fs.StringVar(&o.Instance, "instance", "", "server name (a single folder name under --parent)")
 
@@ -125,6 +131,10 @@ func Parse(args []string, out io.Writer) (opts Options, handled bool, err error)
 	fs.StringVar(&o.Unit, "unit", "", "update/restore/add-mods: systemd service that manages the server (default mc-<instance>.service)")
 	fs.StringVar(&o.Backup, "backup", "", "restore: backup zip to restore (path or filename)")
 
+	fs.StringVar(&o.Remove, "remove", "", "remove: what to take away, comma separated: infra (service, firewall ports, web address), files (the folder)")
+	fs.BoolVar(&o.RemoveUnitFile, "remove-unit-file", false, "remove: delete the service file even though we didn't write it")
+	fs.BoolVar(&o.Yes, "yes", false, "remove: go ahead. Required, since a scripted run has no confirmation to answer")
+
 	if err := fs.Parse(args); err != nil {
 		// --help is a satisfied request, not a failure: usage was already printed.
 		if err == flag.ErrHelp {
@@ -145,10 +155,10 @@ func Parse(args []string, out io.Writer) (opts Options, handled bool, err error)
 
 func validateMode(mode string) error {
 	switch mode {
-	case "", "install", "update", "restore", "add-mods":
+	case "", "install", "update", "restore", "add-mods", "remove":
 		return nil
 	default:
-		return fmt.Errorf("unknown --mode %q: use install, update, restore, or add-mods", mode)
+		return fmt.Errorf("unknown --mode %q: use install, update, restore, add-mods, or remove", mode)
 	}
 }
 

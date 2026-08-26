@@ -39,11 +39,20 @@ func (UFW) Enable(ctx context.Context) error {
 	return Run(ctx, "ufw", "--force", "enable")
 }
 
+// Rule is one port ufw has open, as `ufw status` reports it.
+type Rule struct {
+	Port  int
+	Proto string // "tcp" or "udp"
+}
+
+func (r Rule) String() string { return fmt.Sprintf("%d/%s", r.Port, r.Proto) }
+
 var ufwRuleRE = regexp.MustCompile(`^(\d+)/(tcp|udp)`)
 
-// UsedPorts returns the ports ufw already has rules for, feeding the collision
-// scan. A box without ufw yet simply contributes nothing.
-func (UFW) UsedPorts(ctx context.Context) ([]int, error) {
+// Rules returns the port rules ufw currently has. A box without ufw yet simply
+// has none. Rules are listed once per direction/family, so duplicates are dropped
+// here: callers care which ports are open, not how many lines say so.
+func (UFW) Rules(ctx context.Context) ([]Rule, error) {
 	if !HasCommand("ufw") {
 		return nil, nil
 	}
@@ -51,13 +60,42 @@ func (UFW) UsedPorts(ctx context.Context) ([]int, error) {
 	if err != nil {
 		return nil, err
 	}
-	var ports []int
+	var rules []Rule
+	seen := map[Rule]bool{}
 	for _, line := range splitLines(out) {
-		if m := ufwRuleRE.FindStringSubmatch(line); m != nil {
-			if p, err := strconv.Atoi(m[1]); err == nil {
-				ports = append(ports, p)
-			}
+		m := ufwRuleRE.FindStringSubmatch(line)
+		if m == nil {
+			continue
+		}
+		port, err := strconv.Atoi(m[1])
+		if err != nil {
+			continue
+		}
+		r := Rule{Port: port, Proto: m[2]}
+		if !seen[r] {
+			seen[r] = true
+			rules = append(rules, r)
 		}
 	}
+	return rules, nil
+}
+
+// UsedPorts returns the ports ufw already has rules for, feeding the collision
+// scan.
+func (u UFW) UsedPorts(ctx context.Context) ([]int, error) {
+	rules, err := u.Rules(ctx)
+	if err != nil {
+		return nil, err
+	}
+	ports := make([]int, 0, len(rules))
+	for _, r := range rules {
+		ports = append(ports, r.Port)
+	}
 	return ports, nil
+}
+
+// Delete closes a port ufw has open. It's the exact counterpart of Allow, so a
+// rule this tool added is removed the same way it was written.
+func (UFW) Delete(ctx context.Context, r Rule) error {
+	return Run(ctx, "ufw", "delete", "allow", r.String())
 }

@@ -321,7 +321,9 @@ func askFeatures(ctx context.Context, cfg *config.Config, client modrinth.Client
 	var selected []string
 	field := huh.NewMultiSelect[string]().
 		Title("Which add-ons do you want?").
-		Description("Space to toggle, enter to confirm. Only add-ons with a build for your version are shown. Each sets up its own port/proxy/firewall later.").
+		Description(ui.Keys("Space to tick or untick, enter when the list is right.") + "\n" +
+			"Only add-ons with a build for your version are shown.\n" +
+			"Each one sets up its own port, proxy and firewall rule later.").
 		Options(options...).
 		Value(&selected)
 	if err := field.Run(); err != nil {

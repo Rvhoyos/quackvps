@@ -20,6 +20,7 @@ import (
 	"github.com/rvhoyos/quackvps/internal/install"
 	"github.com/rvhoyos/quackvps/internal/modrinth"
 	"github.com/rvhoyos/quackvps/internal/prompt"
+	"github.com/rvhoyos/quackvps/internal/remove"
 	"github.com/rvhoyos/quackvps/internal/restore"
 	"github.com/rvhoyos/quackvps/internal/system"
 	"github.com/rvhoyos/quackvps/internal/ui"
@@ -105,6 +106,8 @@ func run() error {
 		return restore.Run(ctx, cfg)
 	case config.ModeAddMods:
 		return addmods.Run(ctx, cfg, client)
+	case config.ModeRemove:
+		return remove.Run(ctx, cfg)
 	default:
 		return install.Run(ctx, cfg, client)
 	}

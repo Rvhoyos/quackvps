@@ -33,6 +33,8 @@ func Configure(ctx context.Context, cfg *config.Config, opts Options) error {
 		cfg.Mode = config.ModeRestore
 	case "add-mods":
 		cfg.Mode = config.ModeAddMods
+	case "remove":
+		cfg.Mode = config.ModeRemove
 	default:
 		return fmt.Errorf("unknown --mode %q", opts.Mode)
 	}
@@ -48,6 +50,8 @@ func Configure(ctx context.Context, cfg *config.Config, opts Options) error {
 		return configureUpdate(ctx, cfg, opts)
 	case config.ModeAddMods:
 		return configureAddMods(ctx, cfg, opts)
+	case config.ModeRemove:
+		return configureRemove(ctx, cfg, opts)
 	default:
 		return configureRestore(ctx, cfg, opts)
 	}
@@ -160,9 +164,13 @@ func configureAddMods(ctx context.Context, cfg *config.Config, opts Options) err
 	if len(opts.Mods) == 0 {
 		return fmt.Errorf("add-mods needs --mods with at least one Modrinth slug, e.g. --mods simple-voice-chat")
 	}
-	if err := resolveUnit(ctx, cfg, opts); err != nil {
+	// An empty unit is allowed here: a server with no service still takes mods, it
+	// just isn't stopped and started around them.
+	unit, _, err := findUnit(ctx, cfg, opts)
+	if err != nil {
 		return err
 	}
+	cfg.Unit = unit
 	if err := resolveLoaderAndVersion(cfg, opts); err != nil {
 		return err
 	}
@@ -176,6 +184,54 @@ func configureAddMods(ctx context.Context, cfg *config.Config, opts Options) err
 		cfg.MCVersion = version
 	}
 	cfg.Mods = opts.Mods
+	return nil
+}
+
+// configureRemove fills what a removal takes away. The wizard asks this as a
+// checklist and confirms it twice; a script has no prompts to answer, so --remove
+// carries the checklist and --yes carries the confirmations. Neither has a
+// default: deleting a world is not something a missing flag should decide.
+func configureRemove(ctx context.Context, cfg *config.Config, opts Options) error {
+	if !system.InstanceExists(cfg.Parent, cfg.Instance) {
+		return fmt.Errorf("%s holds no server to remove", cfg.Dir)
+	}
+	if !opts.Yes {
+		return fmt.Errorf("remove needs --yes: it deletes a server and a scripted run has no confirmation to answer")
+	}
+	if err := parseRemoveParts(cfg, opts.Remove); err != nil {
+		return err
+	}
+
+	// An empty unit is allowed: a server nobody put under systemd is removed as the
+	// files it is.
+	unit, _, err := findUnit(ctx, cfg, opts)
+	if err != nil {
+		return err
+	}
+	cfg.Unit = unit
+	// A unit we wrote goes with the server; one the user wrote is theirs, and only
+	// --remove-unit-file says otherwise.
+	cfg.RemoveUnitFile = unit != "" && (opts.RemoveUnitFile || system.OwnUnitFile(unit))
+	return nil
+}
+
+// parseRemoveParts reads --remove, the flag form of the removal checklist.
+func parseRemoveParts(cfg *config.Config, list string) error {
+	if strings.TrimSpace(list) == "" {
+		return fmt.Errorf("remove needs --remove: infra (its service, firewall ports and web address), files (its folder), or both")
+	}
+	for _, part := range strings.Split(list, ",") {
+		switch strings.TrimSpace(part) {
+		case "infra":
+			cfg.RemoveInfra = true
+		case "files":
+			cfg.RemoveFiles = true
+		case "":
+			continue // a trailing comma isn't an error
+		default:
+			return fmt.Errorf("unknown --remove value %q: use infra, files, or both", part)
+		}
+	}
 	return nil
 }
 
@@ -211,20 +267,27 @@ func configureRestore(ctx context.Context, cfg *config.Config, opts Options) err
 	return nil
 }
 
-// resolveUnit records the service update and restore will stop and start: --unit
-// when given, otherwise our own mc-<instance>.service. A scripted run never
-// guesses and never prompts, so when neither exists it fails, naming the services
-// that do point at this folder.
-func resolveUnit(ctx context.Context, cfg *config.Config, opts Options) error {
+// findUnit looks up the service that manages this server: --unit when given,
+// otherwise our own mc-<instance>.service. A scripted run never guesses and never
+// prompts, so a --unit systemd doesn't know is an error; finding nothing is not,
+// and the caller decides what an empty name means. The services that do point at
+// this folder come back with it, for the error message that needs them.
+func findUnit(ctx context.Context, cfg *config.Config, opts Options) (string, []system.Unit, error) {
 	if opts.Unit != "" {
 		if !system.UnitExists(opts.Unit) {
-			return fmt.Errorf("systemd knows no service %q", opts.Unit)
+			return "", nil, fmt.Errorf("systemd knows no service %q", opts.Unit)
 		}
-		cfg.Unit = opts.Unit
-		return nil
+		return opts.Unit, nil, nil
 	}
+	return system.ResolveUnit(ctx, minecraft.UnitName(cfg.Instance)+".service")
+}
 
-	name, services, err := system.ResolveUnit(ctx, minecraft.UnitName(cfg.Instance)+".service")
+// resolveUnit records the service update and restore will stop and start. Both
+// modes rewrite files under the server, so without a service there's nothing to
+// take it offline with and the run fails, naming the services that do point at
+// this folder.
+func resolveUnit(ctx context.Context, cfg *config.Config, opts Options) error {
+	name, services, err := findUnit(ctx, cfg, opts)
 	if err != nil {
 		return err
 	}
@@ -277,8 +340,8 @@ func backupNames(backups []restore.Backup) string {
 // offline config.Validate. A fetch failure is a warning, not a hard stop, so a
 // transient network problem doesn't block an otherwise valid run.
 func VerifyBuildable(ctx context.Context, cfg *config.Config, client modrinth.Client) error {
-	if cfg.Mode == config.ModeRestore {
-		return nil // restore only swaps the world; no loader/version to check
+	if cfg.Mode == config.ModeRestore || cfg.Mode == config.ModeRemove {
+		return nil // neither one installs anything; there's no build to check
 	}
 
 	releases, err := loader.SupportedVersions(ctx, cfg.Loader)

@@ -19,7 +19,7 @@ func UnitName(instance string) string { return "mc-" + instance }
 // systemd would resort to SIGKILL.
 func UnitFile(instance, user, dir string) string {
 	return fmt.Sprintf(`[Unit]
-Description=Minecraft server (%[1]s), managed by quackvps
+Description=Minecraft server (%[1]s), %[4]s
 After=network-online.target
 Wants=network-online.target
 
@@ -35,7 +35,7 @@ ExecStop=/usr/bin/screen -S %[1]s -p 0 -X stuff "say Server stopping...\rstop\r"
 
 [Install]
 WantedBy=multi-user.target
-`, instance, user, dir)
+`, instance, user, dir, system.UnitMarker)
 }
 
 // InstallUnit writes an instance's unit file and reloads systemd so it's known.

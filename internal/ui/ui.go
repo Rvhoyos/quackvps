@@ -24,6 +24,7 @@ var (
 	headerStyle  = lipgloss.NewStyle().Bold(true)
 	warnStyle    = lipgloss.NewStyle().Foreground(warnColor)
 	cautionStyle = lipgloss.NewStyle().Foreground(warnColor).Bold(true)
+	keysStyle    = lipgloss.NewStyle().Foreground(lipgloss.Color("6")).Bold(true)
 	successStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("2"))
 	errorStyle   = lipgloss.NewStyle().Foreground(lipgloss.Color("1"))
 )
@@ -46,6 +47,15 @@ func Warn(format string, args ...any) { fmt.Println(warnStyle.Render("  ! " + ms
 // the part the user must not miss doesn't read like the rest of the hint.
 func Caution(format string, args ...any) string {
 	return cautionStyle.Render("! " + msg(format, args...))
+}
+
+// Keys returns the which-key-does-what line for the top of a prompt's
+// description. A screen you can't use until you know its keys is the one hint a
+// user cannot skip, and the prompt library renders a description in grey, which is
+// exactly where an eye slides past. Its own color and weight, distinct from
+// Caution's, so a warning on the same screen still reads as the louder of the two.
+func Keys(format string, args ...any) string {
+	return keysStyle.Render(msg(format, args...))
 }
 
 // Success prints a completed-step line.

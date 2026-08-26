@@ -51,7 +51,7 @@ func WriteInstanceFile(instance string, blocks []string) error {
 	if err := os.MkdirAll(InstanceDir, 0o755); err != nil {
 		return fmt.Errorf("create %s: %w", InstanceDir, err)
 	}
-	path := filepath.Join(InstanceDir, instance+".caddy")
+	path := instanceFile(instance)
 	contents := strings.Join(blocks, "\n") + "\n"
 	if err := os.WriteFile(path, []byte(contents), 0o644); err != nil {
 		return fmt.Errorf("write %s: %w", path, err)
@@ -62,11 +62,30 @@ func WriteInstanceFile(instance string, blocks []string) error {
 // RemoveInstanceFile deletes an instance's site file, the whole teardown for its
 // Caddy config.
 func RemoveInstanceFile(instance string) error {
-	path := filepath.Join(InstanceDir, instance+".caddy")
+	path := instanceFile(instance)
 	if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
 		return fmt.Errorf("remove %s: %w", path, err)
 	}
 	return nil
+}
+
+// HasInstanceFile reports whether an instance has a site file, so removing a
+// server that was never behind the proxy doesn't reload Caddy for nothing.
+func HasInstanceFile(instance string) (bool, error) {
+	path := instanceFile(instance)
+	switch _, err := os.Stat(path); {
+	case err == nil:
+		return true, nil
+	case os.IsNotExist(err):
+		return false, nil
+	default:
+		return false, fmt.Errorf("check %s: %w", path, err)
+	}
+}
+
+// instanceFile is where one instance's site blocks live, one file per server.
+func instanceFile(instance string) string {
+	return filepath.Join(InstanceDir, instance+".caddy")
 }
 
 // Validate checks the whole Caddy config parses before we reload.

@@ -43,6 +43,11 @@ func Run(ctx context.Context, cfg *config.Config, client modrinth.Client, picker
 		}
 		return cfg, askMCVersion(ctx, cfg, targetVersion)
 
+	case config.ModeRemove:
+		// Removal reads nothing off the server: not the loader, not the version.
+		// What it ran doesn't change what taking it away means.
+		return cfg, askRemoval(cfg)
+
 	case config.ModeAddMods:
 		// Adding mods changes neither the loader nor the version: both describe the
 		// server as it already is, and the mods have to match them.

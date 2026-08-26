@@ -23,16 +23,31 @@ import (
 
 // Run installs cfg.Mods into cfg.Dir (already validated).
 func Run(ctx context.Context, cfg *config.Config, client modrinth.Client) error {
-	// Adding mods writes no launch script, so a server that has none has nothing
-	// for a new service to start.
-	if cfg.AdoptUnit && !minecraft.HasRunScript(cfg.Dir) {
-		return fmt.Errorf("%s has no run.sh, so there's nothing for a service to start: update this server first, then add mods", cfg.Dir)
-	}
 	if err := checkVersion(cfg); err != nil {
 		return err
 	}
 
-	unit, owner, err := minecraft.TakeOffline(ctx, cfg)
+	// A server set up by hand starts some other way, so it may have no run.sh for
+	// the new service to call. An existing one is left alone: it carries whatever
+	// flags its owner chose.
+	if cfg.AdoptUnit && !minecraft.HasRunScript(cfg.Dir) {
+		ui.Step("Writing a launch script")
+		if err := minecraft.WriteLaunchScript(ctx, cfg); err != nil {
+			return err
+		}
+	}
+
+	var unit system.Unit
+	var owner string
+	var err error
+	if cfg.Unit == "" {
+		// No service to stop and start: the jars go in and the server is left as it
+		// was found, which is what the user asked for by skipping it.
+		ui.Warn("No service manages %s, so the mods go in but stopping and starting the server stays yours to do.", cfg.Dir)
+		owner, err = system.InstanceOwner(unit, cfg.Dir)
+	} else {
+		unit, owner, err = minecraft.TakeOffline(ctx, cfg)
+	}
 	if err != nil {
 		return err
 	}
@@ -46,11 +61,13 @@ func Run(ctx context.Context, cfg *config.Config, client modrinth.Client) error 
 		return undo(ctx, cfg.Dir, unit.Name, result.Added, err)
 	}
 
-	ui.Step("Starting the server")
-	if err := system.StartAndVerify(ctx, unit.Name); err != nil {
-		return undo(ctx, cfg.Dir, unit.Name, result.Added, err)
+	if unit.Name != "" {
+		ui.Step("Starting the server")
+		if err := system.StartAndVerify(ctx, unit.Name); err != nil {
+			return undo(ctx, cfg.Dir, unit.Name, result.Added, err)
+		}
 	}
-	report(result)
+	report(result, unit.Name != "")
 	return nil
 }
 
@@ -73,7 +90,8 @@ func checkVersion(cfg *config.Config) error {
 
 // undo removes the jars this run put in mods/ and starts the server back up, so
 // a mod that won't download or won't load leaves the server as it was found. The
-// original cause is returned, so the run still fails.
+// original cause is returned, so the run still fails. An empty unit means nothing
+// was stopped, so there is nothing to start either.
 func undo(ctx context.Context, dir, unit string, added []string, cause error) error {
 	ui.Error("Adding mods failed: %v", cause)
 	// Read the log before the restart overwrites it: "didn't stay running" on its
@@ -83,12 +101,15 @@ func undo(ctx context.Context, dir, unit string, added []string, cause error) er
 		ui.Warn("%s", reason)
 	}
 	if len(added) > 0 {
-		ui.Info("Removing the %d jar(s) this run added, then starting the server again.", len(added))
+		ui.Info("Removing the %d jar(s) this run added.", len(added))
 		for _, name := range added {
 			if err := os.Remove(filepath.Join(dir, "mods", name)); err != nil && !os.IsNotExist(err) {
 				ui.Warn("could not remove %s: %v", name, err)
 			}
 		}
+	}
+	if unit == "" {
+		return cause
 	}
 	if err := system.StartAndVerify(ctx, unit); err != nil {
 		ui.Warn("the server did not start again either: %v", err)
@@ -108,15 +129,22 @@ func bootFailureReasons(dir string) []string {
 	return minecraft.FailureReasons(string(log))
 }
 
-func report(result mods.Result) {
+func report(result mods.Result, started bool) {
 	ui.Step("Mods added")
 	if len(result.Skipped) > 0 {
 		ui.Info("Already installed, left as they are: %s", strings.Join(result.Skipped, ", "))
 	}
 	if len(result.Added) == 0 {
-		ui.Success("Nothing new to install; the server is back up unchanged.")
+		if started {
+			ui.Success("Nothing new to install; the server is back up unchanged.")
+		} else {
+			ui.Success("Nothing new to install; the server is unchanged.")
+		}
 		return
 	}
 	ui.Success("%d jar(s) added, dependencies included:", len(result.Added))
 	ui.Bullet(result.Added...)
+	if !started {
+		ui.Info("Start the server yourself to load them.")
+	}
 }

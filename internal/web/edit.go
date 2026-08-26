@@ -38,20 +38,30 @@ func quackedsmpConfig(dir string) string {
 	return filepath.Join(dir, "config", "quackedsmp.json")
 }
 
+// loadJSON reads a JSON object a mod generated. A missing file is an error (the
+// mod should have created it), which is what makes the editors edit-only.
+func loadJSON(path string) (map[string]any, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, fmt.Errorf("%s not found, the server didn't generate it; please report this", path)
+		}
+		return nil, fmt.Errorf("read %s: %w", path, err)
+	}
+	m := map[string]any{}
+	if err := json.Unmarshal(data, &m); err != nil {
+		return nil, fmt.Errorf("parse %s: %w", path, err)
+	}
+	return m, nil
+}
+
 // editJSON reads a JSON object the mod generated, applies mutate, and writes it
 // back indented. A missing file is an error (the mod should have created it)
 // mutate is where the candidate-key lookups live, so it can also error.
 func editJSON(path string, mutate func(m map[string]any) error) error {
-	data, err := os.ReadFile(path)
+	m, err := loadJSON(path)
 	if err != nil {
-		if os.IsNotExist(err) {
-			return fmt.Errorf("%s not found, the server didn't generate it; please report this", path)
-		}
-		return fmt.Errorf("read %s: %w", path, err)
-	}
-	m := map[string]any{}
-	if err := json.Unmarshal(data, &m); err != nil {
-		return fmt.Errorf("parse %s: %w", path, err)
+		return err
 	}
 
 	if err := mutate(m); err != nil {
@@ -161,22 +171,22 @@ func setHOCONKey(path string, candidates []string, value string) error {
 	return fmt.Errorf("none of %v found in %s, the mod's config format may have changed; please report this", candidates, path)
 }
 
-// setYAMLSectionKey sets the first matching candidate key that lives inside a
-// top-level YAML section (e.g. `port` under `bedrock:`). It edits only within that
-// section's indented block, so a key that also appears in another section (Geyser's
-// `port` exists under both `bedrock` and `java`) is left untouched elsewhere. Like
-// setHOCONKey it's edit-only and comment-preserving: a missing file, a missing
-// section, or a missing key is a reportable error, never a fabricated line.
-func setYAMLSectionKey(path, section string, candidates []string, value string) error {
-	data, err := os.ReadFile(path)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return fmt.Errorf("%s not found, the server didn't generate it; please report this", path)
-		}
-		return fmt.Errorf("read %s: %w", path, err)
-	}
-	lines := strings.Split(string(data), "\n")
+// yamlLine is one key/value line found inside a YAML section, with enough detail
+// to read its value or rewrite it in place.
+type yamlLine struct {
+	index  int
+	indent string
+	key    string
+	value  string
+}
 
+// findYAMLSectionKey locates the first candidate key that lives inside a top-level
+// YAML section (e.g. `port` under `bedrock:`). Only that section's indented block
+// is searched, so a key that also appears elsewhere (Geyser's `port` exists under
+// both `bedrock` and `java`) is never mistaken for it. A missing section or key is
+// a reportable error: the mod generates these configs, so we never guess through
+// one that doesn't look as expected.
+func findYAMLSectionKey(lines []string, section string, candidates []string, path string) (yamlLine, error) {
 	header := regexp.MustCompile(`^` + regexp.QuoteMeta(section) + `:\s*$`)
 	start := -1
 	for i, line := range lines {
@@ -186,7 +196,7 @@ func setYAMLSectionKey(path, section string, candidates []string, value string) 
 		}
 	}
 	if start < 0 {
-		return fmt.Errorf("section %q not found in %s, the mod's config format may have changed; please report this", section, path)
+		return yamlLine{}, fmt.Errorf("section %q not found in %s, the mod's config format may have changed; please report this", section, path)
 	}
 
 	// The section's body is its indented lines; the first line starting at column 0
@@ -197,14 +207,47 @@ func setYAMLSectionKey(path, section string, candidates []string, value string) 
 			break
 		}
 		for _, key := range candidates {
-			re := regexp.MustCompile(`^(\s+)` + regexp.QuoteMeta(key) + `\s*:\s*.*$`)
-			if re.MatchString(lines[i]) {
-				lines[i] = re.ReplaceAllString(lines[i], "${1}"+key+": "+value)
-				return os.WriteFile(path, []byte(strings.Join(lines, "\n")), 0o644)
+			re := regexp.MustCompile(`^(\s+)` + regexp.QuoteMeta(key) + `\s*:\s*(.*)$`)
+			if m := re.FindStringSubmatch(lines[i]); m != nil {
+				return yamlLine{index: i, indent: m[1], key: key, value: strings.TrimSpace(m[2])}, nil
 			}
 		}
 	}
-	return fmt.Errorf("none of %v found in section %q of %s, the mod's config format may have changed; please report this", candidates, section, path)
+	return yamlLine{}, fmt.Errorf("none of %v found in section %q of %s, the mod's config format may have changed; please report this", candidates, section, path)
+}
+
+// readYAMLSectionKey returns the current value of a key inside a YAML section.
+func readYAMLSectionKey(path, section string, candidates []string) (string, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return "", fmt.Errorf("read %s: %w", path, err)
+	}
+	line, err := findYAMLSectionKey(strings.Split(string(data), "\n"), section, candidates, path)
+	if err != nil {
+		return "", err
+	}
+	return line.value, nil
+}
+
+// setYAMLSectionKey sets a key inside a top-level YAML section, rewriting only
+// that one line so comments and every other setting survive. Like setHOCONKey it's
+// edit-only: a missing file, section, or key is a reportable error, never a
+// fabricated line.
+func setYAMLSectionKey(path, section string, candidates []string, value string) error {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return fmt.Errorf("%s not found, the server didn't generate it; please report this", path)
+		}
+		return fmt.Errorf("read %s: %w", path, err)
+	}
+	lines := strings.Split(string(data), "\n")
+	line, err := findYAMLSectionKey(lines, section, candidates, path)
+	if err != nil {
+		return err
+	}
+	lines[line.index] = line.indent + line.key + ": " + value
+	return os.WriteFile(path, []byte(strings.Join(lines, "\n")), 0o644)
 }
 
 // setPropKey sets the first matching candidate key in an existing .properties

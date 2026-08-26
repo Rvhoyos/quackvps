@@ -8,6 +8,8 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"syscall"
+	"time"
 )
 
 // Unit is what systemd knows about one service: enough to tell whether it manages
@@ -178,6 +180,49 @@ func RunningIn(dir string) (pid int, cmdline string, running bool) {
 		}
 	}
 	return 0, "", false
+}
+
+// StopProcess ends a process and waits for it to actually go. SIGTERM first,
+// which a Minecraft server treats as a shutdown and answers by saving the world,
+// then SIGKILL if it's still there at the deadline. It's how a server nobody put
+// under systemd is stopped before its folder is deleted.
+func StopProcess(ctx context.Context, pid int, grace time.Duration) error {
+	if err := syscall.Kill(pid, syscall.SIGTERM); err != nil {
+		if err == syscall.ESRCH {
+			return nil // already gone
+		}
+		return fmt.Errorf("stop pid %d: %w", pid, err)
+	}
+	if waitGone(ctx, pid, grace) {
+		return nil
+	}
+	if err := syscall.Kill(pid, syscall.SIGKILL); err != nil && err != syscall.ESRCH {
+		return fmt.Errorf("kill pid %d: %w", pid, err)
+	}
+	if !waitGone(ctx, pid, 10*time.Second) {
+		return fmt.Errorf("pid %d is still running after SIGKILL", pid)
+	}
+	return nil
+}
+
+// waitGone polls until a process no longer exists, or the timeout runs out.
+// Signal 0 is the standard existence check: it delivers nothing and only reports
+// whether the process is there.
+func waitGone(ctx context.Context, pid int, timeout time.Duration) bool {
+	deadline := time.Now().Add(timeout)
+	for {
+		if syscall.Kill(pid, 0) == syscall.ESRCH {
+			return true
+		}
+		if time.Now().After(deadline) {
+			return false
+		}
+		select {
+		case <-ctx.Done():
+			return false
+		case <-time.After(time.Second):
+		}
+	}
 }
 
 // processCmdline reads a process's command line, whose arguments are NUL

@@ -37,7 +37,9 @@ func CollisionScan(ctx context.Context, parent string) (map[int]bool, error) {
 	}
 	addAll(used, listening)
 
-	addAll(used, instancePorts(parent))
+	for port := range SiblingPorts(parent, "") {
+		used[port] = true
+	}
 	return used, nil
 }
 
@@ -72,9 +74,13 @@ func Listening(ctx context.Context) ([]int, error) {
 // safe here: a false positive only makes a default skip a port it needn't.
 var configPortRE = regexp.MustCompile(`(?i)port"?\s*[:=]\s*"?(\d{2,5})`)
 
-// instancePorts scans sibling instances under parent for ports already in use,
-// so a second server never defaults onto a first server's port.
-func instancePorts(parent string) []int {
+// SiblingPorts maps every port the instances under parent have configured to the
+// instance holding it, so a second server never defaults onto a first server's
+// port and removing one never closes a port another still needs. exclude names one
+// instance to leave out, for the caller asking about the others: a re-run of the
+// wizard shouldn't collide with itself, and a server being removed shouldn't count
+// its own ports as somebody else's.
+func SiblingPorts(parent, exclude string) map[int]string {
 	entries, err := os.ReadDir(parent)
 	if err != nil {
 		return nil
@@ -85,16 +91,20 @@ func instancePorts(parent string) []int {
 		"config/bluemap/webserver.conf",
 		"config/voicechat/voicechat-server.properties",
 	}
-	var ports []int
+	owners := map[int]string{}
 	for _, e := range entries {
-		if !e.IsDir() {
+		if !e.IsDir() || e.Name() == exclude {
 			continue
 		}
 		for _, rel := range relFiles {
-			ports = append(ports, scanPortsInFile(filepath.Join(parent, e.Name(), rel))...)
+			for _, port := range scanPortsInFile(filepath.Join(parent, e.Name(), rel)) {
+				if _, taken := owners[port]; !taken {
+					owners[port] = e.Name()
+				}
+			}
 		}
 	}
-	return ports
+	return owners
 }
 
 func scanPortsInFile(path string) []int {
