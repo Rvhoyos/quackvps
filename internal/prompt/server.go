@@ -230,12 +230,15 @@ func askManagingService(dir string, matches []system.Unit, answers unitAnswers) 
 }
 
 // managingDescription says the one thing the options can't: which answer is
-// likely right here.
+// likely right here, and why the question is being asked at all. The why is a
+// caution rather than more grey prose, because a user who skips it can pick a
+// service that has nothing to do with this server.
 func managingDescription(matches []system.Unit) string {
+	const why = "These jobs stop the server before touching its files, and its service is how that's done."
 	if len(matches) == 0 {
-		return "No service on this box names this folder."
+		return "No service on this box names this folder.\n" + ui.Caution("%s", why)
 	}
-	return "The first service runs out of this folder, so it's almost certainly the one."
+	return "The first service runs out of this folder, so it's almost certainly the one.\n" + ui.Caution("%s", why)
 }
 
 // askAnyService lists every service on the box, for the server whose unit names

@@ -76,10 +76,10 @@ var configPortRE = regexp.MustCompile(`(?i)port"?\s*[:=]\s*"?(\d{2,5})`)
 
 // SiblingPorts maps every port the instances under parent have configured to the
 // instance holding it, so a second server never defaults onto a first server's
-// port and removing one never closes a port another still needs. exclude names one
-// instance to leave out, for the caller asking about the others: a re-run of the
-// wizard shouldn't collide with itself, and a server being removed shouldn't count
-// its own ports as somebody else's.
+// port and removing one never closes a port another still needs. exclude leaves
+// one instance out, which is what a removal needs: its own ports are the ones it
+// came to close, so counting them as somebody else's would spare every one of them.
+// The collision scan passes "" and asks about them all.
 func SiblingPorts(parent, exclude string) map[int]string {
 	entries, err := os.ReadDir(parent)
 	if err != nil {
