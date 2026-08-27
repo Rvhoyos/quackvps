@@ -66,9 +66,11 @@ OpenSSH client ships with Windows 10 (1809+) and 11.
   - **QuackedSMP** management panel (plus Votifier v2).
   - **BlueMap** live world map.
   - **Simple Voice Chat** proximity voice.
+  - **Bedrock crossplay** (Geyser + Floodgate), so phone and console players can join. Fabric and NeoForge only.
 - Configures Caddy as a reverse proxy. With a domain, each web service gets a subdomain with automatic HTTPS. Without one, services stay on localhost and you get a copy-paste `ssh -L` tunnel command.
 - Configures UFW, opening only the ports that must be public and keeping your SSH port open.
 - Optionally hardens SSH to key-only (opt-in, runs first): walks you through a key and verifies it works before turning off password login.
+- Removes a server: its service, ports, web address and folder, and nothing belonging to the other servers on the box.
 
 Run `sudo quackvps` again to add another server. Each one gets its own folder, service, ports, and subdomains, and coexists with the rest. Ports are scanned every run and the next free one is the default.
 
@@ -83,7 +85,11 @@ Updating or restoring a server set up by hand keeps its existing heap flags, rea
 
 ## Modpacks
 
-The wizard offers a curated set per loader, live-filtered to the ones that actually build for your chosen loader and Minecraft version. In headless mode, `--modpack` takes **any Modrinth modpack slug**, so you're not limited to these. A slug is the last path segment of a Modrinth project URL, e.g. `modrinth.com/modpack/`**`cobblemon-fabric`**. The curated picks:
+The wizard offers a curated set per loader, live-filtered to the ones that actually build for your chosen loader and Minecraft version. In headless mode, `--modpack` takes **any Modrinth modpack slug**, so you're not limited to these. A slug is the last path segment of a Modrinth project URL, e.g. `modrinth.com/modpack/`**`cobblemon-fabric`**.
+
+Modrinth's "works on servers" tag is author-set and often wrong, so a scheduled job boots one pack a day. A pack that crashes is parked for the version that broke it: it stops being offered, and `--modpack` fails up front instead of leaving you a server that won't start.
+
+The curated picks:
 
 <details>
 <summary>NeoForge (1.21+)</summary>
@@ -133,6 +139,11 @@ sudo quackvps --mode restore --parent /home/ubuntu/mc --instance survival \
 # Add mods to it, dependencies included. Stops the server, installs, starts it back up.
 sudo quackvps --mode add-mods --parent /home/ubuntu/mc --instance survival \
   --mods simple-voice-chat,bluemap
+
+# Take that server off the box, world included. A script has no confirmation to answer, so --yes
+# stands in for the ones the wizard asks.
+sudo quackvps --mode remove --parent /home/ubuntu/mc --instance survival \
+  --remove infra,files --yes
 ```
 
 Every run needs `--mode`, `--parent`, and `--instance`.
@@ -146,8 +157,8 @@ Every run needs `--mode`, `--parent`, and `--instance`.
 | `--heap-min` / `--heap-max` | JVM heap in GB (`-Xms` / `-Xmx`). |
 | `--server-port` | Minecraft game port. |
 | `--modpack` | Modpack slug (optional). |
-| `--dashboard` / `--votifier` / `--bluemap` / `--voicechat` | Enable an add-on; each needs its `-port`. |
-| `--dashboard-port` / `--votifier-port` / `--bluemap-port` / `--voicechat-port` | Port for the matching add-on. |
+| `--dashboard` / `--votifier` / `--bluemap` / `--voicechat` / `--geyser` | Enable an add-on; each needs its `-port`. `--geyser` is Bedrock crossplay, on Fabric and NeoForge only. |
+| `--dashboard-port` / `--votifier-port` / `--bluemap-port` / `--voicechat-port` / `--geyser-port` | Port for the matching add-on. |
 | `--domain` / `--email` | Serve web add-ons at `<sub>.<domain>` over HTTPS instead of localhost. |
 | `--dashboard-subdomain` / `--bluemap-subdomain` | Subdomain per web add-on (with `--domain`). |
 | `--harden-ssh` / `--ssh-pubkey` | Harden SSH to key-only. `--ssh-pubkey` is required with it. |
@@ -174,12 +185,17 @@ Every run needs `--mode`, `--parent`, and `--instance`.
 
 Mods already installed are left alone. If the server won't start with the new jars, they are removed and it is started again, and the reason from its log is printed.
 
-<details>
-<summary>Roadmap (not yet available)</summary>
+**Remove** (`--mode remove`):
 
-- **Remove a server.** Clean teardown: stop and disable its service, drop its firewall rules, remove its Caddy config, and delete its folder, after a confirmation.
+| Flag | Does |
+|---|---|
+| `--remove` | What to take away: `infra` (its service, firewall ports and web address), `files` (its folder, world included), or both, comma separated. |
+| `--yes` | Go ahead. Required, since a script has no confirmation to answer. |
+| `--remove-unit-file` | Also delete a service file this tool didn't write. Without it, such a service is stopped and disabled but left on disk. |
 
-</details>
+Neither `--remove` nor `--yes` has a default: deleting a world is not something a missing flag should decide. Backups in `backups/` go with the folder, so copy off what you want to keep first.
+
+`--unit <service>` applies to update, restore, add-mods and remove: the service that manages the server, when it isn't `mc-<instance>.service`.
 
 ## Build from source
 

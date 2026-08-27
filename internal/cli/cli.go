@@ -128,7 +128,7 @@ func Parse(args []string, out io.Writer) (opts Options, handled bool, err error)
 
 	fs.BoolVar(&o.EmptyMods, "empty-mods", false, "update: empty the mods folder instead of upgrading it")
 	mods := fs.String("mods", "", "add-mods: Modrinth slugs to install, comma separated")
-	fs.StringVar(&o.Unit, "unit", "", "update/restore/add-mods: systemd service that manages the server (default mc-<instance>.service)")
+	fs.StringVar(&o.Unit, "unit", "", "update/restore/add-mods/remove: systemd service that manages the server (default mc-<instance>.service)")
 	fs.StringVar(&o.Backup, "backup", "", "restore: backup zip to restore (path or filename)")
 
 	fs.StringVar(&o.Remove, "remove", "", "remove: what to take away, comma separated: infra (service, firewall ports, web address), files (the folder)")
