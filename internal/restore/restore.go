@@ -1,8 +1,8 @@
-// Package restore puts a QuackedSMP world backup back into an existing instance.
-// QuackedSMP writes <dir>/backups/world-<stamp>.zip (a plain zip whose root is
-// world/); restoring one stops the server, moves the current world aside, unzips
-// the chosen backup in its place, and starts back up, rolling the old world back
-// if the server won't boot. Like update, it's scoped to one instance and never
+// Package restore puts a world backup back into an existing instance. Any zip in
+// <dir>/backups/ counts, QuackedSMP's world-<stamp>.zip or otherwise, as long as
+// it holds one world folder; restoring one stops the server, moves the current
+// world aside, unzips the chosen backup in its place, and starts back up, rolling
+// the old world back if the server won't boot. Like update, it's scoped to one instance and never
 // prompts: the wizard picks the backup, this package executes.
 package restore
 
@@ -29,6 +29,16 @@ func Run(ctx context.Context, cfg *config.Config) error {
 		}
 	}
 
+	// Read before anything is stopped, so a backup this server can't take leaves it
+	// running and untouched.
+	backup, err := readArchive(cfg.Backup)
+	if err != nil {
+		return err
+	}
+	if err := refuseNewerWorld(cfg.Dir, backup.saved); err != nil {
+		return err
+	}
+
 	unit, owner, err := minecraft.TakeOffline(ctx, cfg)
 	if err != nil {
 		return err
@@ -36,11 +46,7 @@ func Run(ctx context.Context, cfg *config.Config) error {
 
 	// The backup names the world it restores, so the folder we move out of its way
 	// is that same one, whatever this server calls its level.
-	level, err := zipRootDir(cfg.Backup)
-	if err != nil {
-		return err
-	}
-	world := filepath.Join(cfg.Dir, level)
+	world := filepath.Join(cfg.Dir, backup.level)
 	aside, err := moveAside(world)
 	if err != nil {
 		return err
@@ -71,6 +77,25 @@ func Run(ctx context.Context, cfg *config.Config) error {
 	ui.Step("Restore complete")
 	ui.Success("Restored %s.", filepath.Base(cfg.Backup))
 	return nil
+}
+
+// refuseNewerWorld stops a restore that would take the world backwards in
+// version. Minecraft migrates a world forward when it loads one saved by an older
+// build, but there is no path back: a world saved by a newer build than the
+// server runs is refused by the game and corrupted by a server that tries anyway.
+// An unknown version on either side compares to nothing and lets the restore
+// through, since this guards the one case that is certainly wrong rather than
+// gating every backup on being readable.
+func refuseNewerWorld(dir string, saved minecraft.Level) error {
+	current, err := minecraft.WorldLevel(dir)
+	if err != nil || current.DataVersion == 0 || saved.DataVersion == 0 {
+		return nil
+	}
+	if saved.DataVersion <= current.DataVersion {
+		return nil
+	}
+	return fmt.Errorf("this backup was saved by Minecraft %s but this server's world is on %s, and worlds only move forward: restoring it would corrupt it. Update this server to %s first, then restore",
+		saved.Version, current.Version, saved.Version)
 }
 
 // moveAside renames the instance's world/ out of the way so the backup can take

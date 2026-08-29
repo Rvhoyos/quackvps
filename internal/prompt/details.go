@@ -143,7 +143,7 @@ func askModpack(ctx context.Context, cfg *config.Config, client modrinth.Client)
 		return err
 	}
 
-	options := []huh.Option[string]{huh.NewOption("None: just the loader (add mods below)", "")}
+	options := []huh.Option[string]{huh.NewOption("None: just the loader (add-ons next)", "")}
 	for _, o := range offers {
 		options = append(options, huh.NewOption(o.Title, o.Slug))
 	}

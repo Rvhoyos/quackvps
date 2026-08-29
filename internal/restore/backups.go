@@ -9,24 +9,30 @@ import (
 	"sort"
 	"strings"
 	"time"
+
+	"github.com/rvhoyos/quackvps/internal/minecraft"
+	"github.com/rvhoyos/quackvps/internal/ui"
 )
 
 // stampLayout is the timestamp QuackedSMP (and our own update backup) puts in a
-// backup filename: world-YYYYMMDD-HHMMSS.zip.
+// backup filename: world-YYYYMMDD-HHMMSS.zip. It is how a backup is dated and
+// ordered, never what qualifies a file as one.
 const stampLayout = "20060102-150405"
 
 // Backup is one restorable world archive found in an instance's backups/ folder.
 type Backup struct {
 	Path  string    // absolute path to the .zip
 	When  time.Time // taken from the filename stamp, or the file's mtime as a fallback
-	Label string    // human-readable time for the picker, e.g. "2026-06-10 16:10:24"
+	Label string    // what the picker shows: "world-20260610-161024.zip (2026-06-10 16:10:24)"
 }
 
-// ListBackups returns the world backups under <dir>/backups, newest first. A
-// missing backups/ folder is not an error, it just means there's nothing to
-// restore, and the caller reports that.
+// ListBackups returns every zip under <dir>/backups, newest first. Nothing but
+// the folder makes a file a backup: a world zip renamed by hand, or copied in
+// from another box, restores exactly like one QuackedSMP just wrote. A missing
+// backups/ folder is not an error, it just means there is nothing to restore, and
+// the caller reports that.
 func ListBackups(dir string) ([]Backup, error) {
-	zips, err := filepath.Glob(filepath.Join(dir, "backups", "world-*.zip"))
+	zips, err := filepath.Glob(filepath.Join(dir, "backups", "*.zip"))
 	if err != nil {
 		return nil, fmt.Errorf("list backups: %w", err)
 	}
@@ -37,7 +43,7 @@ func ListBackups(dir string) ([]Backup, error) {
 		backups = append(backups, Backup{
 			Path:  path,
 			When:  when,
-			Label: when.Format("2006-01-02 15:04:05"),
+			Label: fmt.Sprintf("%s (%s)", filepath.Base(path), when.Format("2006-01-02 15:04:05")),
 		})
 	}
 	sort.Slice(backups, func(i, j int) bool { return backups[i].When.After(backups[j].When) })
@@ -58,37 +64,72 @@ func backupTime(path string) time.Time {
 	return time.Time{}
 }
 
-// extractZip unpacks a backup zip into destDir. A QuackedSMP backup's root is
-// world/ itself, so extracting into the instance dir recreates <destDir>/world/.
-// zipRootDir reports the single top-level folder a backup holds, which names the
-// world it restores: our own backups and QuackedSMP's are both a zip of one world
-// folder, but that folder is called whatever level-name said when it was written.
-// The caller moves that same folder aside, so the two always pair up.
-func zipRootDir(src string) (string, error) {
+// archive is what one read of a backup zip tells us about the world inside it.
+type archive struct {
+	level string          // the single top-level folder, which names the world it holds
+	saved minecraft.Level // what that folder's level.dat says, zero when it has none we can read
+}
+
+// readArchive reads a backup's shape and its world's version in one pass. The
+// folder matters because our own backups and QuackedSMP's are both a zip of one
+// world folder, but that folder is called whatever level-name said when it was
+// written, so the caller learns from the backup itself which folder to move
+// aside and the two always pair up. The version matters because a world only
+// migrates forward.
+//
+// A zip whose level.dat is missing or unreadable is still a backup: what's lost
+// is the version check, not the restore.
+func readArchive(src string) (archive, error) {
 	zr, err := zip.OpenReader(src)
 	if err != nil {
-		return "", fmt.Errorf("open backup %s: %w", src, err)
+		return archive{}, fmt.Errorf("open backup %s: %w", src, err)
 	}
 	defer zr.Close()
 
-	root := ""
+	var a archive
+	var level *zip.File
 	for _, f := range zr.File {
-		top, _, nested := strings.Cut(filepath.ToSlash(f.Name), "/")
+		top, rest, nested := strings.Cut(filepath.ToSlash(f.Name), "/")
 		if !nested || top == "" {
-			return "", fmt.Errorf("backup %s has %q at its root; it should hold one world folder", filepath.Base(src), f.Name)
+			return archive{}, fmt.Errorf("backup %s has %q at its root; it should hold one world folder", filepath.Base(src), f.Name)
 		}
-		if root == "" {
-			root = top
-		} else if top != root {
-			return "", fmt.Errorf("backup %s holds more than one folder (%s, %s); it should hold one world folder", filepath.Base(src), root, top)
+		if a.level == "" {
+			a.level = top
+		} else if top != a.level {
+			return archive{}, fmt.Errorf("backup %s holds more than one folder (%s, %s); it should hold one world folder", filepath.Base(src), a.level, top)
+		}
+		if rest == "level.dat" {
+			level = f
 		}
 	}
-	if root == "" {
-		return "", fmt.Errorf("backup %s is empty", filepath.Base(src))
+	if a.level == "" {
+		return archive{}, fmt.Errorf("backup %s is empty", filepath.Base(src))
 	}
-	return root, nil
+	if level == nil {
+		ui.Warn("%s holds no level.dat, so its Minecraft version can't be checked against this server's world.", filepath.Base(src))
+		return a, nil
+	}
+	saved, err := readZippedLevel(level)
+	if err != nil {
+		ui.Warn("Could not read a Minecraft version out of %s: %v", filepath.Base(src), err)
+		return a, nil
+	}
+	a.saved = saved
+	return a, nil
 }
 
+// readZippedLevel decodes a level.dat straight out of the archive, no unpacking.
+func readZippedLevel(f *zip.File) (minecraft.Level, error) {
+	rc, err := f.Open()
+	if err != nil {
+		return minecraft.Level{}, fmt.Errorf("read %s from backup: %w", f.Name, err)
+	}
+	defer rc.Close()
+	return minecraft.ReadLevel(rc)
+}
+
+// extractZip unpacks a backup zip into destDir. A backup's root is the world
+// folder itself, so extracting into the instance dir recreates <destDir>/world/.
 func extractZip(src, destDir string) error {
 	zr, err := zip.OpenReader(src)
 	if err != nil {

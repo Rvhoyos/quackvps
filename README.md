@@ -174,7 +174,7 @@ Every run needs `--mode`, `--parent`, and `--instance`.
 
 | Flag | Does |
 |---|---|
-| `--backup` | Backup zip to restore, by filename or full path, from the server's `backups/` folder. |
+| `--backup` | Backup zip to restore, by filename or full path. Any `.zip` in the server's `backups/` folder counts, whatever it's called. One saved by a newer Minecraft version than the server runs is refused, since worlds only migrate forward. |
 
 **Add mods** (`--mode add-mods`):
 
